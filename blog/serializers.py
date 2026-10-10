@@ -49,6 +49,9 @@ class PostSerializer(serializers.ModelSerializer):
             "content_html",
             "category",
             "profile",
+            'keywords',
+            'is_paywalled',
+            'notify_subscribers',
             "created_by",
             "updated_by",
             "created_at",
@@ -66,3 +69,10 @@ class PostSerializer(serializers.ModelSerializer):
             # Pass the parent serializer context so request is available
             return ProfileSerializer(obj.created_by.profile, context=self.context).data
         return None
+
+    def validate_keywords(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Keywords must be a list of strings.")
+        if len(value) > 5:
+            raise serializers.ValidationError("You can add up to 5 topics only.")
+        return [str(tag).strip() for tag in value if str(tag).strip()]

@@ -3,3 +3,6 @@ djangorestframework
 django-cors-headers
 djangorestframework-simplejwt
 pillow
+pytrends
+sentence-transformers
+beautifulsoup4
