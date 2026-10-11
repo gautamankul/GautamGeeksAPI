@@ -46,3 +46,52 @@ class Post(models.Model):
         self.is_published = True
         self.is_draft = False
         super().save(*args, **kwargs)
+
+
+class PostDailyStat(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='daily_stats')
+    date = models.DateField(db_index=True)
+    presentations = models.PositiveIntegerField(default=0)  # Impressions in feeds
+    views = models.PositiveIntegerField(default=0)  # Story page clicks
+    reads = models.PositiveIntegerField(default=0)  # Readers who spent reading time
+
+    class Meta:
+        unique_together = ('post', 'date')
+        ordering = ['date']
+
+    def __str__(self):
+        return f"{self.post.title} - {self.date}"
+
+
+class StoryList(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="story_lists")
+    name = models.CharField(max_length=120)  # e.g., "Reading list", "Django Authentication"
+    description = models.TextField(blank=True, null=True)
+    is_private = models.BooleanField(default=True)
+    stories = models.ManyToManyField(Post, related_name="in_lists", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.name} - {self.user.username}"
+
+
+class Follow(models.Model):
+    follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='following_set')
+    following = models.ForeignKey(User, on_delete=models.CASCADE, related_name='follower_set')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('follower', 'following')
+
+
+class EmailSubscriber(models.Model):
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_subscriber_set')
+    subscriber = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscribed_author_set')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('author', 'subscriber')

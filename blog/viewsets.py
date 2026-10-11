@@ -1,7 +1,7 @@
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import viewsets
-from .models import Post
-from .serializers import PostSerializer
+from .models import Post, StoryList
+from .serializers import PostSerializer, StoryListSerializer
 
 
 # Create your views here.
@@ -28,7 +28,6 @@ class UserPostViewSet(viewsets.ModelViewSet):
 class PublicPostViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PostSerializer
     permission_classes = [AllowAny]  # No login required
-    
 
     def get_queryset(self):
         queryset = Post.objects.filter(is_published=True).order_by('-created_at')
@@ -43,8 +42,18 @@ class PublicPostViewSet(viewsets.ReadOnlyModelViewSet):
             return queryset[:5]
 
         return queryset
-    
+
     def get_serializer_context(self):
         # 🔑 This ensures request is available inside serializers
         return {"request": self.request}
-    
+
+
+class StoryListViewSet(viewsets.ModelViewSet):
+    serializer_class = StoryListSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return StoryList.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
