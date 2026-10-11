@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Post, Category, StoryList
+from .models import Post, Category, StoryList, PostInteraction
 from accounts.models import Profile
 
 User = get_user_model()
@@ -76,6 +76,12 @@ class PostSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("You can add up to 5 topics only.")
         return [str(tag).strip() for tag in value if str(tag).strip()]
 
+
+class InteractionInputSerializer(serializers.Serializer):
+    post_id = serializers.IntegerField()
+    action = serializers.ChoiceField(
+        choices=PostInteraction.Action.choices
+    )
 
 class StoryListSerializer(serializers.ModelSerializer):
     story_count = serializers.IntegerField(source="stories.count", read_only=True)

@@ -6,3 +6,4 @@ pillow
 pytrends
 sentence-transformers
 beautifulsoup4
+scikit-learn

@@ -12,9 +12,9 @@ from datetime import datetime, date
 from django.db.models import Sum
 import calendar
 
-from .serializers import PostSerializer
-from .models import Post, PostDailyStat
-from .utils import get_trending_keywords, get_post_search_text
+from .serializers import *
+from .models import *
+from .utils import *
 import logging
 import math
 
@@ -253,6 +253,42 @@ class TrendingPostView(APIView):
                 {"error": "Unable to fetch trending posts."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+
+
+class PostInteractionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = InteractionInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        post_id = serializer.validated_data["post_id"]
+        action = serializer.validated_data["action"]
+
+        post = Post.objects.filter(
+            id=post_id,
+            is_published=True,
+            is_draft=False,
+        ).first()
+
+        if post is None:
+            return Response(
+                {"detail": "Post not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Add paywall/subscription authorization here.
+        # Rate-limit view events and deduplicate repeated views.
+        PostInteraction.objects.create(
+            user=request.user,
+            post=post,
+            action=action,
+        )
+
+        return Response(
+            {"detail": "Interaction recorded."},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class MonthlyStatsView(APIView):
