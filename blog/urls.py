@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .viewsets import PostViewSet , UserPostViewSet ,PublicPostViewSet ,StoryListViewSet
-from .views import ImageUploadView,TrendingPostView, MonthlyStatsView
+from .views import ImageUploadView, MonthlyStatsView
 
 # Routers 
 router = DefaultRouter()
@@ -15,6 +15,5 @@ router.register(r'story_lists', StoryListViewSet, basename='story_lists')
 urlpatterns = [
     path('', include(router.urls)),
     path('upload-image/', ImageUploadView.as_view(), name='upload_image'),
-    path('trending-posts/', TrendingPostView.as_view(), name='trending_posts'),
     path('monthly-stats/', MonthlyStatsView.as_view(), name='monthly_stats'),
 ]

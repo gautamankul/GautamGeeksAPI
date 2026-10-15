@@ -3,7 +3,5 @@ djangorestframework
 django-cors-headers
 djangorestframework-simplejwt
 pillow
-pytrends
-sentence-transformers
-beautifulsoup4
-scikit-learn
+fastembed
+numpy

@@ -83,6 +83,7 @@ class InteractionInputSerializer(serializers.Serializer):
         choices=PostInteraction.Action.choices
     )
 
+
 class StoryListSerializer(serializers.ModelSerializer):
     story_count = serializers.IntegerField(source="stories.count", read_only=True)
     thumbnails = serializers.SerializerMethodField()
