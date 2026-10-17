@@ -2,21 +2,23 @@ import os
 from django.core.files.storage import default_storage
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.conf import settings
+from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.generics import ListAPIView
 from rest_framework import status
-from django.utils import timezone
+from django.db import transaction
 from datetime import datetime, date
 from django.db.models import Sum
-import calendar
 
-from .recommendations import get_recommended_posts, get_user_top_categories
+from .recommendations import *
 from .serializers import *
 from .models import *
+
+import calendar
 import logging
-import math
+
+MAX_CLAPS = 100
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,101 @@ class ImageUploadView(APIView):
         image_url = request.build_absolute_uri(settings.MEDIA_URL + file_path)
 
         return Response({"url": image_url})
+
+
+class MyRecommendedPostsView(ListAPIView):
+    """ This is for logged user you post for recommended posts """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = PostSerializer
+
+    def get_queryset(self):
+        print('get_recommended_posts', get_recommended_posts(self.request.user))
+        return get_recommended_posts(self.request.user)
+
+
+class MyFeaturesPostView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        top_ids = [c.id for c in get_user_top_categories(request.user, limit=5)]
+
+        base = (
+            Post.objects
+            .filter(is_published=True)
+            .exclude(created_by=request.user)
+            .select_related("category", "created_by")
+        )
+
+        posts = []
+        if top_ids:
+            posts = list(base.filter(category_id__in=top_ids).order_by("?")[:5])
+
+        # Fill up to exactly 5 if the top categories don't have enough posts
+        if len(posts) < 5:
+            picked = [p.id for p in posts]
+            filler = (
+                base.exclude(id__in=picked)
+                .order_by("-is_trending", "?")[: 5 - len(posts)]
+            )
+            posts.extend(filler)
+
+        return Response(
+            PostSerializer(posts[:5], many=True, context={"request": request}).data
+        )
+
+
+class ClapPostView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        try:
+            count = max(1, int(request.data.get("count", 1)))
+        except (TypeError, ValueError):
+            count = 1
+
+        with transaction.atomic():
+            # Lock the post row so parallel taps can't exceed the limit
+            post = get_object_or_404(
+                Post.objects.select_for_update(), pk=post_id, is_published=True
+            )
+
+            claps = PostInteraction.objects.filter(
+                post=post, action=PostInteraction.Action.CLAP
+            )
+            my_claps = claps.filter(user=request.user).count()
+            remaining = MAX_CLAPS - my_claps
+
+            if remaining <= 0:
+                return Response(
+                    {
+                        "detail": f"Max {MAX_CLAPS} claps per post reached.",
+                        "my_claps": my_claps,
+                        "total_claps": claps.count(),
+                    },
+                    status=400,
+                )
+
+            to_add = min(count, remaining)
+            PostInteraction.objects.bulk_create(
+                [
+                    PostInteraction(
+                        user=request.user,
+                        post=post,
+                        action=PostInteraction.Action.CLAP,
+                    )
+                    for _ in range(to_add)
+                ]
+            )
+
+            return Response(
+                {
+                    "added": to_add,
+                    "my_claps": my_claps + to_add,
+                    "total_claps": claps.count(),
+                    "limit_reached": my_claps + to_add >= MAX_CLAPS,
+                }
+            )
 
 
 class PostInteractionView(APIView):
@@ -146,45 +243,3 @@ class MonthlyStatsView(APIView):
             },
             "chart_data": chart_data,
         })
-
-
-class MyRecommendedPostsView(ListAPIView):
-    """ This is for logged user you post for recommended posts """
-
-    permission_classes = [IsAuthenticated]
-    serializer_class = PostSerializer
-
-    def get_queryset(self):
-        print('get_recommended_posts', get_recommended_posts(self.request.user))
-        return get_recommended_posts(self.request.user)
-
-
-class MyFeaturesPostView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        top_ids = [c.id for c in get_user_top_categories(request.user, limit=5)]
-
-        base = (
-            Post.objects
-            .filter(is_published=True)
-            .exclude(created_by=request.user)
-            .select_related("category", "created_by")
-        )
-
-        posts = []
-        if top_ids:
-            posts = list(base.filter(category_id__in=top_ids).order_by("?")[:5])
-
-        # Fill up to exactly 5 if the top categories don't have enough posts
-        if len(posts) < 5:
-            picked = [p.id for p in posts]
-            filler = (
-                base.exclude(id__in=picked)
-                .order_by("-is_trending", "?")[: 5 - len(posts)]
-            )
-            posts.extend(filler)
-
-        return Response(
-            PostSerializer(posts[:5], many=True, context={"request": request}).data
-        )

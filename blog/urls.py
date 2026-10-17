@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .viewsets import PostViewSet , UserPostViewSet ,PublicPostViewSet ,StoryListViewSet
-from .views import ImageUploadView, MonthlyStatsView , MyRecommendedPostsView ,MyFeaturesPostView
+from .views import *
 
 # Routers 
 router = DefaultRouter()
@@ -18,4 +18,5 @@ urlpatterns = [
     path('monthly-stats/', MonthlyStatsView.as_view(), name='monthly_stats'),
     path("my-recommended/", MyRecommendedPostsView.as_view()),
     path("my-features/", MyFeaturesPostView.as_view()),
+    path("clap/<int:post_id>/", ClapPostView.as_view()),
 ]
