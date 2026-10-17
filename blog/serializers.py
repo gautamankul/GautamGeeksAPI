@@ -21,6 +21,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 class BProfileSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
+    total_claps = serializers.SerializerMethodField()
+    my_claps = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -31,6 +33,13 @@ class BProfileSerializer(serializers.ModelSerializer):
         if obj.avatar and hasattr(obj.avatar, "url"):
             return request.build_absolute_uri(obj.avatar.url)
         return None
+
+    def get_total_claps(self, obj):
+        return obj.interactions.filter(action="clap").count()
+
+    def get_my_claps(self, obj):
+        user = self.context["request"].user
+        return obj.interactions.filter(action="clap", user=user).count()
 
 
 class PostSerializer(serializers.ModelSerializer):
