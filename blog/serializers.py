@@ -21,12 +21,10 @@ class UserSerializer(serializers.ModelSerializer):
 
 class BProfileSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
-    total_claps = serializers.SerializerMethodField()
-    my_claps = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
-        fields = ["id", "full_name", "avatar", "avatar_url", "bio", "total_claps", "my_claps"]
+        fields = ["id", "full_name", "avatar", "avatar_url", "bio"]
 
     def get_avatar_url(self, obj):
         request = self.context.get("request")
@@ -34,19 +32,14 @@ class BProfileSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.avatar.url)
         return None
 
-    def get_total_claps(self, obj):
-        return obj.interactions.filter(action="clap").count()
-
-    def get_my_claps(self, obj):
-        user = self.context["request"].user
-        return obj.interactions.filter(action="clap", user=user).count()
-
 
 class PostSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     created_by = UserSerializer(read_only=True)
     updated_by = UserSerializer(read_only=True)
     profile = serializers.SerializerMethodField()
+    total_claps = serializers.SerializerMethodField()
+    my_claps = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -60,6 +53,8 @@ class PostSerializer(serializers.ModelSerializer):
             'keywords',
             'is_paywalled',
             'notify_subscribers',
+            "total_claps",
+            "my_claps"
             "created_by",
             "updated_by",
             "created_at",
@@ -84,6 +79,13 @@ class PostSerializer(serializers.ModelSerializer):
         if len(value) > 5:
             raise serializers.ValidationError("You can add up to 5 topics only.")
         return [str(tag).strip() for tag in value if str(tag).strip()]
+
+    def get_total_claps(self, obj):
+        return obj.interactions.filter(action="clap").count()
+
+    def get_my_claps(self, obj):
+        user = self.context["request"].user
+        return obj.interactions.filter(action="clap", user=user).count()
 
 
 class InteractionInputSerializer(serializers.Serializer):
