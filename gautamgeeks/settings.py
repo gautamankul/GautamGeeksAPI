@@ -87,23 +87,23 @@ db_token = os.getenv("DB_TOKEN")
 db_url = os.getenv("DB_URL")
 
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
 # DATABASES = {
-#     "default": {
-#         "ENGINE": "django_libsql",
-#         "NAME": os.getenv("TURSO_DB_URL"),
-#         "AUTH_TOKEN": os.getenv("TURSO_AUTH_TOKEN"),
-#         "OPTIONS": {
-#             "timeout": 30,
-#         },
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django_libsql",
+        "NAME": os.getenv("TURSO_DB_URL"),
+        "AUTH_TOKEN": os.getenv("TURSO_AUTH_TOKEN"),
+        "OPTIONS": {
+            "timeout": 30,
+        },
+    }
+}
 
 
 # Password validation
@@ -161,6 +161,7 @@ MAILERS = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://super-duper-capybara-jp6rw5qj9j42jpwr-5173.app.github.dev"
 ]
 
 # JWT

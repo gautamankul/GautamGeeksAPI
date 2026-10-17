@@ -5,12 +5,14 @@ from rest_framework.response import Response
 from django.conf import settings
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.generics import ListAPIView
 from rest_framework import status
 from django.utils import timezone
 from datetime import datetime, date
 from django.db.models import Sum
 import calendar
 
+from .recommendations import get_recommended_posts, get_user_top_categories
 from .serializers import *
 from .models import *
 import logging
@@ -144,3 +146,45 @@ class MonthlyStatsView(APIView):
             },
             "chart_data": chart_data,
         })
+
+
+class MyRecommendedPostsView(ListAPIView):
+    """ This is for logged user you post for recommended posts """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = PostSerializer
+
+    def get_queryset(self):
+        print('get_recommended_posts', get_recommended_posts(self.request.user))
+        return get_recommended_posts(self.request.user)
+
+
+class MyFeaturesPostView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        top_ids = [c.id for c in get_user_top_categories(request.user, limit=5)]
+
+        base = (
+            Post.objects
+            .filter(is_published=True)
+            .exclude(created_by=request.user)
+            .select_related("category", "created_by")
+        )
+
+        posts = []
+        if top_ids:
+            posts = list(base.filter(category_id__in=top_ids).order_by("?")[:5])
+
+        # Fill up to exactly 5 if the top categories don't have enough posts
+        if len(posts) < 5:
+            picked = [p.id for p in posts]
+            filler = (
+                base.exclude(id__in=picked)
+                .order_by("-is_trending", "?")[: 5 - len(posts)]
+            )
+            posts.extend(filler)
+
+        return Response(
+            PostSerializer(posts[:5], many=True, context={"request": request}).data
+        )
