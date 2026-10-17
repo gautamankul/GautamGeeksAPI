@@ -26,7 +26,7 @@ class BProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ["id", "full_name", "avatar", "avatar_url", "bio"]
+        fields = ["id", "full_name", "avatar", "avatar_url", "bio", "total_claps", "my_claps"]
 
     def get_avatar_url(self, obj):
         request = self.context.get("request")
