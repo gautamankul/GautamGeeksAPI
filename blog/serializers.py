@@ -54,7 +54,7 @@ class PostSerializer(serializers.ModelSerializer):
             'is_paywalled',
             'notify_subscribers',
             "total_claps",
-            "my_claps"
+            "my_claps",
             "created_by",
             "updated_by",
             "created_at",
