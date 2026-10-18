@@ -1,14 +1,19 @@
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import viewsets
-from .models import Post, StoryList
-from .serializers import PostSerializer, StoryListSerializer
+from .models import Post
+from .serializations import (UserPostViewSetSerializer, PublicPostViewSetSerializer)
 
 
-# Create your views here.
 class PostViewSet(viewsets.ModelViewSet):
-    queryset = Post.objects.all()
-    serializer_class = PostSerializer
+    serializer_class = UserPostViewSetSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Post.objects.filter(
+            created_by=self.request.user
+        ).select_related(
+            "category", "created_by", "updated_by"
+        )
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -17,43 +22,38 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer.save(updated_by=self.request.user)
 
 
-class UserPostViewSet(viewsets.ModelViewSet):
-    serializer_class = PostSerializer
+class UserPostViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = UserPostViewSetSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Post.objects.filter(created_by=self.request.user)
+        return Post.objects.filter(
+            created_by=self.request.user
+        ).select_related(
+            "category", "created_by", "updated_by"
+        )
 
 
 class PublicPostViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = PostSerializer
-    permission_classes = [AllowAny]  # No login required
+    serializer_class = PublicPostViewSetSerializer
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
-        queryset = Post.objects.filter(is_published=True).order_by('-created_at')
+        queryset = Post.objects.filter(
+            is_published=True,
+            is_draft=False,
+        ).select_related(
+            "category", "created_by", "updated_by"
+        ).order_by("-created_at")
 
-        # ✅ Filter by category name if provided
-        category_name = self.request.query_params.get('category')
+        category_name = self.request.query_params.get("category")
+
         if category_name:
-            queryset = queryset.filter(category__name__iexact=category_name)
+            queryset = queryset.filter(
+                category__name__iexact=category_name
+            )
 
-        # ✅ Limit to latest 5 posts for list view
-        if self.action == 'list':
+        if self.action == "list":
             return queryset[:5]
 
         return queryset
-
-    def get_serializer_context(self):
-        # 🔑 This ensures request is available inside serializers
-        return {"request": self.request}
-
-
-class StoryListViewSet(viewsets.ModelViewSet):
-    serializer_class = StoryListSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        return StoryList.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
