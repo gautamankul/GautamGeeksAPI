@@ -18,5 +18,7 @@ urlpatterns = [
     path('monthly-stats/', MonthlyStatsView.as_view(), name='monthly_stats'),
     path("my-recommended/", MyRecommendedPostsView.as_view()),
     path("my-features/", MyFeaturesPostView.as_view()),
-    path("clap/<int:post_id>/", ClapPostView.as_view()),
+    path("clap/<int:post_id>/",PostClapAPIView.as_view(),name="post-clap",),
+    path("comments/<int:post_id>/",PostCommentAPIView.as_view(),name="post-comment",),
+    path("clapping/<int:post_id>/", ClapPostView.as_view()),
 ]

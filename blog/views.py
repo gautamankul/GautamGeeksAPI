@@ -19,6 +19,8 @@ import calendar
 import logging
 
 MAX_CLAPS = 100
+MAX_CLAPS_PER_POST = 100
+MAX_COMMENTS_PER_POST = 5
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +81,131 @@ class MyFeaturesPostView(APIView):
 
         return Response(
             PostSerializer(posts[:5], many=True, context={"request": request}).data
+        )
+
+
+class PostClapAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        try:
+            post = Post.objects.get(
+                id=post_id,
+                is_published=True,
+                is_draft=False,
+            )
+        except Post.DoesNotExist:
+            return Response(
+                {"error": "Post not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            with transaction.atomic():
+                clap, created = PostClap.objects.get_or_create(
+                    user=request.user,
+                    post=post,
+                    defaults={"clap_count": 0},
+                )
+
+                # Lock the row to prevent concurrent requests
+                # from exceeding the limit.
+                clap = PostClap.objects.select_for_update().get(
+                    pk=clap.pk
+                )
+
+                if clap.clap_count >= MAX_CLAPS_PER_POST:
+                    return Response(
+                        {
+                            "error": "You can clap a post up to 100 times.",
+                            "clap_count": clap.clap_count,
+                            "max_claps": MAX_CLAPS_PER_POST,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                clap.clap_count += 1
+                clap.save(update_fields=["clap_count"])
+
+        except Exception:
+            raise
+
+        total_claps = PostClap.objects.filter(
+            post=post
+        ).aggregate(total=Sum("clap_count"))["total"] or 0
+
+        return Response(
+            {
+                "message": "Clap added successfully.",
+                "your_claps": clap.clap_count,
+                "total_claps": total_claps,
+                "max_claps": MAX_CLAPS_PER_POST,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PostCommentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        comment_text = request.data.get("comment", "").strip()
+
+        if not comment_text:
+            return Response(
+                {"error": "Comment cannot be empty."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            post = Post.objects.get(
+                id=post_id,
+                is_published=True,
+                is_draft=False,
+            )
+        except Post.DoesNotExist:
+            return Response(
+                {"error": "Post not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        with transaction.atomic():
+            # Serialize comment creation for this post/user.
+            Post.objects.select_for_update().get(pk=post.pk)
+
+            comment_count = PostComment.objects.filter(
+                user=request.user,
+                post=post,
+            ).count()
+
+            if comment_count >= MAX_COMMENTS_PER_POST:
+                return Response(
+                    {
+                        "error": "You can comment on a post up to 5 times.",
+                        "your_comments": comment_count,
+                        "max_comments": MAX_COMMENTS_PER_POST,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            comment = PostComment.objects.create(
+                user=request.user,
+                post=post,
+                comment=comment_text,
+            )
+
+        return Response(
+            {
+                "message": "Comment added successfully.",
+                "comment": {
+                    "id": comment.id,
+                    "comment": comment.comment,
+                    "created_at": comment.created_at,
+                },
+                "your_comments": comment_count + 1,
+                "max_comments": MAX_COMMENTS_PER_POST,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 

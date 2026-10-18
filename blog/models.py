@@ -65,6 +65,43 @@ class Post(models.Model):
         super().save(*args, **kwargs)
 
 
+class PostClap(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_clap", )
+    post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="clap", )
+    clap_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "post")
+        ordering = ['-created_at']
+
+
+class PostComment(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_comments", )
+    post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="post_comments", )
+    comment = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class StoryList(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="story_lists")
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True, null=True)
+    is_private = models.BooleanField(default=True)
+    stories = models.ManyToManyField(Post, related_name="in_lists", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.name} - {self.user.username}"
+
+
 class PostInteraction(models.Model):
     class Action(models.TextChoices):
         VIEW = "view", "View"
@@ -74,10 +111,8 @@ class PostInteraction(models.Model):
         CLAP = "clap", "Clap"
         DISMISS = "dismiss", "Not interested"
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_interactions", )
-    post = models.ForeignKey(
-        "Post", on_delete=models.CASCADE, related_name="interactions", )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_interactions", )
+    post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="interactions", )
     action = models.CharField(max_length=10, choices=Action.choices)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -114,24 +149,6 @@ class PostDailyStat(models.Model):
 
     def __str__(self):
         return f"{self.post.title} - {self.date}"
-
-
-class StoryList(models.Model):
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="story_lists")
-    # e.g., "Reading list", "Django Authentication"
-    name = models.CharField(max_length=120)
-    description = models.TextField(blank=True, null=True)
-    is_private = models.BooleanField(default=True)
-    stories = models.ManyToManyField(Post, related_name="in_lists", blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-updated_at"]
-
-    def __str__(self):
-        return f"{self.name} - {self.user.username}"
 
 
 class Follow(models.Model):

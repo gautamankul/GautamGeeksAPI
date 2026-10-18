@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Post, Category, StoryList, PostInteraction
+from .models import Post, Category, StoryList, PostInteraction, PostClap, PostComment
 from accounts.models import Profile
 
 User = get_user_model()
@@ -31,6 +31,18 @@ class BProfileSerializer(serializers.ModelSerializer):
         if obj.avatar and hasattr(obj.avatar, "url"):
             return request.build_absolute_uri(obj.avatar.url)
         return None
+
+
+class PostClapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostClap
+        fields = '__all__'
+
+
+class PostCommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostComment
+        fields = '__all__'
 
 
 class PostSerializer(serializers.ModelSerializer):
@@ -87,7 +99,7 @@ class PostSerializer(serializers.ModelSerializer):
         # user = self.context["request"].user
         return obj.interactions.filter(action="clap").count()
 
-
+##------
 class InteractionInputSerializer(serializers.Serializer):
     post_id = serializers.IntegerField()
     action = serializers.ChoiceField(
