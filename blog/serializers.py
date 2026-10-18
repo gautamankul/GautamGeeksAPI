@@ -84,8 +84,8 @@ class PostSerializer(serializers.ModelSerializer):
         return obj.interactions.filter(action="clap").count()
 
     def get_my_claps(self, obj):
-        user = self.context["request"].user
-        return obj.interactions.filter(action="clap", user=user).count()
+        # user = self.context["request"].user
+        return obj.interactions.filter(action="clap").count()
 
 
 class InteractionInputSerializer(serializers.Serializer):
