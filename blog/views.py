@@ -81,7 +81,7 @@ class MyFeaturesPostView(APIView):
 
         else:
             # Fetch 5 random posts from the user's categories
-            posts = list(base.filter(category_id__in=top_categories).order_by("?")[:5])
+            posts = list(base.filter(category_id__in=top_categories).order_by("-id")[:5])
 
             # If fewer than 5 were found, fill with ran dom posts
             if len(posts) < 5:
@@ -89,7 +89,7 @@ class MyFeaturesPostView(APIView):
 
                 remaining_posts = base.exclude(
                     id__in=selected_ids
-                ).order_by("?")[:5 - len(posts)]
+                ).order_by("-id")[:5 - len(posts)]
 
                 posts.extend(remaining_posts)
 
