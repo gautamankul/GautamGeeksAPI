@@ -57,31 +57,49 @@ class MyFeaturesPostView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        top_ids = [c.id for c in get_user_top_categories(request.user, limit=5)]
+        user = request.user
 
         base = (
             Post.objects
             .filter(is_published=True)
-            .exclude(created_by=request.user)
+            .exclude(created_by=user)
             .select_related("category", "created_by")
         )
 
-        posts = []
-        if top_ids:
-            posts = list(base.filter(category_id__in=top_ids).order_by("?")[:5])
-
-        # Fill up to exactly 5 if the top categories don't have enough posts
-        if len(posts) < 5:
-            picked = [p.id for p in posts]
-            filler = (
-                base.exclude(id__in=picked)
-                .order_by("-is_trending", "?")[: 5 - len(posts)]
-            )
-            posts.extend(filler)
-
-        return Response(
-            PostSerializer(posts[:5], many=True, context={"request": request}).data
+        # Get categories from posts written by the user
+        top_categories = (
+            Post.objects
+            .filter(created_by=user)
+            .values_list("category_id", flat=True)
+            .distinct()
         )
+
+        # If the user has not written any posts,
+        # return 5 random published posts
+        if not top_categories.exists():
+            posts = list(base.order_by("-id")[:5])
+
+        else:
+            # Fetch 5 random posts from the user's categories
+            posts = list(base.filter(category_id__in=top_categories).order_by("?")[:5])
+
+            # If fewer than 5 were found, fill with ran dom posts
+            if len(posts) < 5:
+                selected_ids = [post.id for post in posts]
+
+                remaining_posts = base.exclude(
+                    id__in=selected_ids
+                ).order_by("?")[:5 - len(posts)]
+
+                posts.extend(remaining_posts)
+
+        serializer = PostSerializer(
+            posts[:5],
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(serializer.data)
 
 
 class PostClapAPIView(APIView):
