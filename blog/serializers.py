@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.db.models import Sum
+
 from .models import Post, Category, StoryList, PostInteraction, PostClap, PostComment
 from accounts.models import Profile
 
@@ -93,13 +95,17 @@ class PostSerializer(serializers.ModelSerializer):
         return [str(tag).strip() for tag in value if str(tag).strip()]
 
     def get_total_claps(self, obj):
-        return obj.interactions.filter(action="clap").count()
+        return obj.clap.aggregate(total=Sum("clap_count"))["total"] or 0
 
     def get_my_claps(self, obj):
-        # user = self.context["request"].user
-        return obj.interactions.filter(action="clap").count()
+        request = self.context.get("request")
 
-##------
+        if not request or not request.user.is_authenticated:
+            return 0
+
+        return PostClap.objects.filter(post=obj, user=request.user).aggregate(total=Sum("clap_count"))["total"] or 0
+
+
 class InteractionInputSerializer(serializers.Serializer):
     post_id = serializers.IntegerField()
     action = serializers.ChoiceField(
