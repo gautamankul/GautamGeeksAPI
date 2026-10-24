@@ -4,6 +4,7 @@ django-cors-headers
 djangorestframework-simplejwt
 python-dotenv
 django-libsql-backend
+whitenoise
 pillow
 fastembed
 numpy

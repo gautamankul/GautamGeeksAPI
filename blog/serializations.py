@@ -17,7 +17,7 @@ class CategoryViewSetSerializer(serializers.ModelSerializer):
 class UserViewSetSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username"]
+        fields = ["id", "username", "first_name", "last_name", "email"]
 
 
 class ProfileViewSetSerializer(serializers.ModelSerializer):
@@ -104,9 +104,9 @@ class PublicPostViewSetSerializer(serializers.ModelSerializer):
 
     def get_clap_count(self, obj):
         return (
-            PostClap.objects.filter(post=obj).aggregate(
-                total=Sum("clap_count")
-            )["total"] or 0
+                PostClap.objects.filter(post=obj).aggregate(
+                    total=Sum("clap_count")
+                )["total"] or 0
         )
 
     def get_comments(self, obj):
@@ -188,9 +188,9 @@ class UserPostViewSetSerializer(serializers.ModelSerializer):
 
     def get_total_claps(self, obj):
         return (
-            PostClap.objects.filter(post=obj).aggregate(
-                total=Sum("clap_count")
-            )["total"] or 0
+                PostClap.objects.filter(post=obj).aggregate(
+                    total=Sum("clap_count")
+                )["total"] or 0
         )
 
     def get_my_claps(self, obj):
