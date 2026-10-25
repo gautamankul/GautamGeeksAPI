@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
 
-from .models import Post, Category, StoryList, PostInteraction, PostClap, PostComment
+from .models import Post, Category, StoryList, PostClap, PostComment, Follow
 from accounts.models import Profile
 
 User = get_user_model()
@@ -54,6 +54,7 @@ class PostSerializer(serializers.ModelSerializer):
     profile = serializers.SerializerMethodField()
     total_claps = serializers.SerializerMethodField()
     my_claps = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -65,6 +66,7 @@ class PostSerializer(serializers.ModelSerializer):
             "category",
             "profile",
             'keywords',
+            'is_following',
             'is_paywalled',
             'notify_subscribers',
             "total_claps",
@@ -105,13 +107,19 @@ class PostSerializer(serializers.ModelSerializer):
 
         return PostClap.objects.filter(post=obj, user=request.user).aggregate(total=Sum("clap_count"))["total"] or 0
 
+    def get_is_following(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
 
-class InteractionInputSerializer(serializers.Serializer):
-    post_id = serializers.IntegerField()
-    action = serializers.ChoiceField(
-        choices=PostInteraction.Action.choices
-    )
+        # Users cannot follow themselves
+        if request.user == obj.created_by:
+            return False
 
+        return Follow.objects.filter(
+            follower=request.user,
+            following=obj.created_by
+        ).exists()
 
 class StoryListSerializer(serializers.ModelSerializer):
     story_count = serializers.IntegerField(source="stories.count", read_only=True)
@@ -147,3 +155,10 @@ class StoryListSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             return request.build_absolute_uri(obj.user.profile.avatar.url) if request else obj.user.profile.avatar.url
         return None
+
+
+class FollowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Follow
+        fields = "__all__"
+        read_only_fields = ["id", "follower", "created_at"]

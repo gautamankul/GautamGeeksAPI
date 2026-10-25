@@ -102,37 +102,6 @@ class StoryList(models.Model):
         return f"{self.name} - {self.user.username}"
 
 
-class PostInteraction(models.Model):
-    class Action(models.TextChoices):
-        VIEW = "view", "View"
-        LIKE = "like", "Like"
-        SAVE = "save", "Save"
-        SHARE = "share", "Share"
-        CLAP = "clap", "Clap"
-        DISMISS = "dismiss", "Not interested"
-
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_interactions", )
-    post = models.ForeignKey("Post", on_delete=models.CASCADE, related_name="interactions", )
-    action = models.CharField(max_length=10, choices=Action.choices)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=["user", "action"]),
-            models.Index(fields=["post", "action"]),
-        ]
-
-    def save(self, *args, **kwargs):
-        if self.action == self.CLAP:
-            clap_count = PostInteraction.objects.filter(
-                user=self.user, post=self.post, action=self.CLAP
-            ).count()
-            if clap_count >= 100:
-                raise ValidationError(
-                    "You can clap a maximum of 100 times per post.")
-        super().save(*args, **kwargs)
-
-
 class PostDailyStat(models.Model):
     post = models.ForeignKey(
         Post, on_delete=models.CASCADE, related_name='daily_stats')

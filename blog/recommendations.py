@@ -1,5 +1,5 @@
 from django.db.models import Count, Case, When, IntegerField
-from .models import Category, Post  , PostClap , PostComment
+from .models import Category, Post
 
 
 def get_user_top_categories(user, limit=3):

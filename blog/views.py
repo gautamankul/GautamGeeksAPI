@@ -1,15 +1,13 @@
-import os
-from django.core.files.storage import default_storage
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.generics import ListAPIView
+from django.core.files.storage import default_storage
+from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import generics
 from rest_framework import status
 from django.db import transaction
-from datetime import datetime, date
-from django.db.models import Sum
+from datetime import date
 
 from .recommendations import *
 from .serializers import *
@@ -42,7 +40,7 @@ class ImageUploadView(APIView):
         return Response({"url": image_url})
 
 
-class MyRecommendedPostsView(ListAPIView):
+class MyRecommendedPostsView(generics.ListAPIView):
     """ This is for logged user you post for recommended posts """
 
     permission_classes = [IsAuthenticated]
@@ -99,6 +97,21 @@ class MyFeaturesPostView(APIView):
             context={"request": request},
         )
 
+        return Response(serializer.data)
+
+
+class BlogPostDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        post = get_object_or_404(
+            Post.objects.select_related("category", "created_by", "updated_by", ),
+            pk=pk,
+            is_published=True,
+            is_draft=False,
+        )
+
+        serializer = PostSerializer(post, context={"request": request}, )
         return Response(serializer.data)
 
 
@@ -227,93 +240,49 @@ class PostCommentAPIView(APIView):
         )
 
 
-class ClapPostView(APIView):
+class FollowUserView(generics.CreateAPIView):
+    queryset = Follow.objects.all()
+    serializer_class = FollowSerializer
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, post_id):
-        try:
-            count = max(1, int(request.data.get("count", 1)))
-        except (TypeError, ValueError):
-            count = 1
+    def perform_create(self, serializer):
+        following_user = serializer.validated_data.get('following')
+        follower_user = self.request.user
 
-        with transaction.atomic():
-            # Lock the post row so parallel taps can't exceed the limit
-            post = get_object_or_404(
-                Post.objects.select_for_update(), pk=post_id, is_published=True
-            )
+        # Prevent following yourself
+        if follower_user == following_user:
+            raise ValidationError({
+                "detail": "You cannot follow yourself."
+            })
 
-            claps = PostInteraction.objects.filter(
-                post=post, action=PostInteraction.Action.CLAP
-            )
-            my_claps = claps.filter(user=request.user).count()
-            remaining = MAX_CLAPS - my_claps
-
-            if remaining <= 0:
-                return Response(
-                    {
-                        "detail": f"Max {MAX_CLAPS} claps per post reached.",
-                        "my_claps": my_claps,
-                        "total_claps": claps.count(),
-                    },
-                    status=400,
-                )
-
-            to_add = min(count, remaining)
-            PostInteraction.objects.bulk_create(
-                [
-                    PostInteraction(
-                        user=request.user,
-                        post=post,
-                        action=PostInteraction.Action.CLAP,
-                    )
-                    for _ in range(to_add)
-                ]
-            )
-
-            return Response(
-                {
-                    "added": to_add,
-                    "my_claps": my_claps + to_add,
-                    "total_claps": claps.count(),
-                    "limit_reached": my_claps + to_add >= MAX_CLAPS,
-                }
-            )
+        # Check if already following
+        if Follow.objects.filter(follower=follower_user,following=following_user).exists():
+            raise ValidationError({
+                "detail": "You are already following this user."
+            })
 
 
-class PostInteractionView(APIView):
+        # Create the follow relationship
+        serializer.save(follower=follower_user)
+
+
+class FollowerListView(generics.ListAPIView):
+    serializer_class = FollowSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        user_id = self.kwargs.get('user_id')
+        return Follow.objects.filter(following_id=user_id)
+
+
+class UnfollowUserView(generics.DestroyAPIView):
+    queryset = Follow.objects.all()
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        serializer = InteractionInputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        post_id = serializer.validated_data["post_id"]
-        action = serializer.validated_data["action"]
-
-        post = Post.objects.filter(
-            id=post_id,
-            is_published=True,
-            is_draft=False,
-        ).first()
-
-        if post is None:
-            return Response(
-                {"detail": "Post not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # Add paywall/subscription authorization here.
-        # Rate-limit view events and deduplicate repeated views.
-        PostInteraction.objects.create(
-            user=request.user,
-            post=post,
-            action=action,
-        )
-
-        return Response(
-            {"detail": "Interaction recorded."},
-            status=status.HTTP_201_CREATED,
-        )
+    def get_object(self):
+        following_id = self.kwargs.get('user_id')
+        # Find the follow object where current user follows target user
+        return Follow.objects.get(follower=self.request.user, following_id=following_id)
 
 
 class MonthlyStatsView(APIView):

@@ -3,7 +3,7 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from accounts.models import Profile
-from .models import Post, Category, PostClap, PostComment
+from .models import Post, Category, PostClap, PostComment, Follow
 
 User = get_user_model()
 

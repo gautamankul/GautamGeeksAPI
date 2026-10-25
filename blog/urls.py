@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .viewsets import PostViewSet , UserPostViewSet ,PublicPostViewSet
+from .viewsets import PostViewSet, UserPostViewSet, PublicPostViewSet
 from .views import *
 
 # Routers 
@@ -9,7 +9,6 @@ router.register(r'posts', PostViewSet, basename='post')
 router.register(r'public_posts', PublicPostViewSet, basename='public_posts')
 router.register(r'user_posts', UserPostViewSet, basename='user_posts')
 
-
 # Common URLS
 urlpatterns = [
     path('', include(router.urls)),
@@ -17,7 +16,9 @@ urlpatterns = [
     path('monthly-stats/', MonthlyStatsView.as_view(), name='monthly_stats'),
     path("my-recommended/", MyRecommendedPostsView.as_view()),
     path("my-features/", MyFeaturesPostView.as_view()),
-    path("clap/<int:post_id>/",PostClapAPIView.as_view(),name="post-clap",),
-    path("comments/<int:post_id>/",PostCommentAPIView.as_view(),name="post-comment",),
-    path("clapping/<int:post_id>/", ClapPostView.as_view()),
+    path("detail-story/<int:pk>/", BlogPostDetailAPIView.as_view(), name="blog-post-detail", ),
+    path("clap/<int:post_id>/", PostClapAPIView.as_view(), name="post-clap", ),
+    path("comments/<int:post_id>/", PostCommentAPIView.as_view(), name="post-comment", ),
+    path('follow/', FollowUserView.as_view(), name='follow-user'),
+    path('followers/<int:user_id>/', FollowerListView.as_view(), name='follower-list'),
 ]
