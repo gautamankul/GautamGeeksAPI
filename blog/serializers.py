@@ -55,6 +55,7 @@ class PostSerializer(serializers.ModelSerializer):
     total_claps = serializers.SerializerMethodField()
     my_claps = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
+    comment_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -67,6 +68,7 @@ class PostSerializer(serializers.ModelSerializer):
             "profile",
             'keywords',
             'is_following',
+            'comment_count',
             'is_paywalled',
             'notify_subscribers',
             "total_claps",
@@ -120,6 +122,14 @@ class PostSerializer(serializers.ModelSerializer):
             follower=request.user,
             following=obj.created_by
         ).exists()
+
+    def get_comment_count(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return 0
+
+        return PostComment.objects.filter(post=obj).count()
+
 
 class StoryListSerializer(serializers.ModelSerializer):
     story_count = serializers.IntegerField(source="stories.count", read_only=True)

@@ -19,6 +19,7 @@ urlpatterns = [
     path("detail-story/<int:pk>/", BlogPostDetailAPIView.as_view(), name="blog-post-detail", ),
     path("clap/<int:post_id>/", PostClapAPIView.as_view(), name="post-clap", ),
     path("comments/<int:post_id>/", PostCommentAPIView.as_view(), name="post-comment", ),
+    path("comments-list/<int:post_id>/", PostCommentListAPIView.as_view(), name="post-comment-list", ),
     path('follow/', FollowUserView.as_view(), name='follow-user'),
     path('followers/<int:user_id>/', FollowerListView.as_view(), name='follower-list'),
 ]

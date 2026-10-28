@@ -240,6 +240,23 @@ class PostCommentAPIView(APIView):
         )
 
 
+class PostCommentListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        comments = PostComment.objects.filter(
+            post_id=post_id
+        ).select_related("user").order_by("-created_at")
+
+        serializer = PostCommentSerializer(
+            comments,
+            many=True,
+            context={"request": request}
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class FollowUserView(generics.CreateAPIView):
     queryset = Follow.objects.all()
     serializer_class = FollowSerializer
@@ -256,11 +273,10 @@ class FollowUserView(generics.CreateAPIView):
             })
 
         # Check if already following
-        if Follow.objects.filter(follower=follower_user,following=following_user).exists():
+        if Follow.objects.filter(follower=follower_user, following=following_user).exists():
             raise ValidationError({
                 "detail": "You are already following this user."
             })
-
 
         # Create the follow relationship
         serializer.save(follower=follower_user)
