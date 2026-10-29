@@ -283,13 +283,20 @@ class FollowUserView(generics.CreateAPIView):
         serializer.save(follower=follower_user)
 
 
+
 class FollowerListView(generics.ListAPIView):
     serializer_class = FollowSerializer
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        user_id = self.kwargs.get('user_id')
-        return Follow.objects.filter(following_id=user_id)
+        user_id = self.kwargs.get("user_id")
+
+        return (
+            Follow.objects.filter(follower_id=user_id)
+            .select_related("following", "following__profile")
+            .order_by("-created_at")
+        )
+
 
 
 class UnfollowUserView(generics.DestroyAPIView):
@@ -320,15 +327,6 @@ class StoryListCreateAPIView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
-
-
-# class StoryListAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-#
-#     def get(self, request):
-#         story_lists = StoryList.objects.filter(user=request.user).prefetch_related("stories")
-#         serializer = StoryListSerializer(story_lists, many=True, context={"request": request})
-#         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class StoryListAPIView(generics.ListAPIView):

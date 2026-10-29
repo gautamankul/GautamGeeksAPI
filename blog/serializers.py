@@ -53,7 +53,7 @@ class PostCommentSerializer(serializers.ModelSerializer):
 class StoryListSerializer(serializers.ModelSerializer):
     story_count = serializers.SerializerMethodField()
     thumbnails = serializers.SerializerMethodField()
-    creator_name = serializers.CharField(source="user.profile.full_name",read_only=True,default="Anonymous")
+    creator_name = serializers.CharField(source="user.profile.full_name", read_only=True, default="Anonymous")
     creator_avatar = serializers.SerializerMethodField()
 
     class Meta:
@@ -125,11 +125,43 @@ class StoryListToggleStorySerializer(serializers.Serializer):
 
 
 class FollowSerializer(serializers.ModelSerializer):
+    following_name = serializers.SerializerMethodField()
+    following_avatar = serializers.SerializerMethodField()
+
     class Meta:
         model = Follow
-        fields = "__all__"
-        read_only_fields = ["id", "follower", "created_at"]
+        fields = [
+            "id",
+            "follower",
+            "following",
+            "following_name",
+            "following_avatar",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
 
+    def get_following_name(self, obj):
+        user = obj.following
+        name = f"{user.first_name} {user.last_name}".strip()
+        return name or user.username
+
+    def get_following_avatar(self, obj):
+        request = self.context.get("request")
+        user = obj.following
+
+        profile = getattr(user, "profile", None)
+        avatar = (
+            getattr(profile, "avatar", None)
+            or getattr(profile, "avatar_url", None)
+        )
+
+        if avatar and hasattr(avatar, "url"):
+            return request.build_absolute_uri(avatar.url) if request else avatar.url
+
+        if isinstance(avatar, str) and avatar:
+            return avatar
+
+        return "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60"
 
 class PostSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
