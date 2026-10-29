@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/gautam-geeks-api.iml" filepath="$PROJECT_DIR$/.idea/gautam-geeks-api.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/GautamGeeksAPI.iml" filepath="$PROJECT_DIR$/.idea/GautamGeeksAPI.iml" />
     </modules>
   </component>
 </project>

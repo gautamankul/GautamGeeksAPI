@@ -22,4 +22,8 @@ urlpatterns = [
     path("comments-list/<int:post_id>/", PostCommentListAPIView.as_view(), name="post-comment-list", ),
     path('follow/', FollowUserView.as_view(), name='follow-user'),
     path('followers/<int:user_id>/', FollowerListView.as_view(), name='follower-list'),
+    path("story-lists/create/", StoryListCreateAPIView.as_view(), name="story-list-create"),
+    path("story-lists/", StoryListAPIView.as_view(), name="story-list"),
+    path("story-lists/<int:pk>/", StoryListDetailAPIView.as_view(), name="story-list-detail"),
+    path("story-lists/<int:pk>/delete/", StoryListDeleteAPIView.as_view(), name="story-list-delete"),
 ]

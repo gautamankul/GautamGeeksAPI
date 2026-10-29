@@ -18,7 +18,7 @@ class CategorySerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username"]
+        fields = "__all__"
 
 
 class BProfileSerializer(serializers.ModelSerializer):
@@ -42,9 +42,93 @@ class PostClapSerializer(serializers.ModelSerializer):
 
 
 class PostCommentSerializer(serializers.ModelSerializer):
+    profile = BProfileSerializer(source="user.profile", read_only=True)
+
     class Meta:
         model = PostComment
-        fields = '__all__'
+        exclude = ['post']
+        depth = 1
+
+
+class StoryListSerializer(serializers.ModelSerializer):
+    story_count = serializers.SerializerMethodField()
+    thumbnails = serializers.SerializerMethodField()
+    creator_name = serializers.CharField(source="user.profile.full_name",read_only=True,default="Anonymous")
+    creator_avatar = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoryList
+        fields = [
+            "id",
+            "name",
+            "description",
+            "is_private",
+            "story_count",
+            "thumbnails",
+            "creator_name",
+            "creator_avatar",
+            "stories",
+            "created_at",
+            "updated_at",
+        ]
+        depth = 1
+
+    def get_story_count(self, obj):
+        return obj.stories.count()
+
+    def get_thumbnails(self, obj):
+        request = self.context.get("request")
+        images = []
+
+        for post in obj.stories.all()[:3]:
+            if post.preview_image:
+                url = post.preview_image.url
+                if request:
+                    url = request.build_absolute_uri(url)
+                images.append(url)
+
+        return images
+
+    def get_creator_avatar(self, obj):
+        profile = getattr(obj.user, "profile", None)
+
+        if profile and profile.avatar:
+            url = profile.avatar.url
+            request = self.context.get("request")
+
+            if request:
+                return request.build_absolute_uri(url)
+
+            return url
+
+        return None
+
+
+class StoryListBookmarkSerializer(serializers.ModelSerializer):
+    contains_story = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoryList
+        fields = ["id", "name", "is_private", "contains_story"]
+
+    def get_contains_story(self, obj):
+        story_id = self.context.get("post_id")
+
+        if not story_id:
+            return False
+
+        return obj.stories.filter(id=story_id).exists()
+
+
+class StoryListToggleStorySerializer(serializers.Serializer):
+    story_id = serializers.IntegerField(required=True)
+
+
+class FollowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Follow
+        fields = "__all__"
+        read_only_fields = ["id", "follower", "created_at"]
 
 
 class PostSerializer(serializers.ModelSerializer):
@@ -129,46 +213,3 @@ class PostSerializer(serializers.ModelSerializer):
             return 0
 
         return PostComment.objects.filter(post=obj).count()
-
-
-class StoryListSerializer(serializers.ModelSerializer):
-    story_count = serializers.IntegerField(source="stories.count", read_only=True)
-    thumbnails = serializers.SerializerMethodField()
-    creator_name = serializers.CharField(source="user.profile.full_name", default="Anonymous")
-    creator_avatar = serializers.SerializerMethodField()
-
-    class Meta:
-        model = StoryList
-        fields = [
-            "id",
-            "name",
-            "description",
-            "is_private",
-            "story_count",
-            "thumbnails",
-            "creator_name",
-            "creator_avatar",
-            "created_at",
-            "updated_at",
-        ]
-
-    def get_thumbnails(self, obj):
-        # Gather up to 3 story preview images for the card stack
-        images = []
-        for post in obj.stories.all()[:3]:
-            if post.preview_image:
-                images.append(post.preview_image)
-        return images
-
-    def get_creator_avatar(self, obj):
-        if hasattr(obj.user, 'profile') and obj.user.profile.avatar:
-            request = self.context.get('request')
-            return request.build_absolute_uri(obj.user.profile.avatar.url) if request else obj.user.profile.avatar.url
-        return None
-
-
-class FollowSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Follow
-        fields = "__all__"
-        read_only_fields = ["id", "follower", "created_at"]

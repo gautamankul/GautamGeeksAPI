@@ -1,7 +1,10 @@
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-from django.conf import settings
+from django.core.files.base import ContentFile
+from urllib.parse import urlparse
 from django.db import models
+from django.conf import settings
+import logging
+import requests
 
 User = get_user_model()
 
@@ -25,6 +28,7 @@ class Category(models.Model):
 
 class Post(models.Model):
     title = models.CharField(max_length=255, blank=True, default='')
+    preview_image = models.ImageField(upload_to='post_previews', blank=True, default='')
     content_json = models.JSONField(null=True, blank=True)
     content_html = models.TextField(blank=True, default='')
     is_draft = models.BooleanField(default=True)
@@ -48,19 +52,79 @@ class Post(models.Model):
     def __str__(self):
         return self.title or f"Untitled Post #{self.id}"
 
+    def get_first_image_url(self, data):
+        """Recursively find the first image URL in content_json."""
+        if isinstance(data, dict):
+            # Common image URL keys used by rich-text editors
+            for key in ('src', 'url', 'image_url'):
+                value = data.get(key)
+                if isinstance(value, str) and value:
+                    if key == 'src' or key == 'image_url':
+                        return value
+                    if data.get('type') in ('image', 'img'):
+                        return value
+
+            # Check whether this node represents an image
+            if data.get('type') in ('image', 'img'):
+                for key in ('src', 'url', 'image_url'):
+                    value = data.get(key)
+                    if isinstance(value, str) and value:
+                        return value
+
+            # Search nested objects and lists
+            for value in data.values():
+                result = self.get_first_image_url(value)
+                if result:
+                    return result
+
+        elif isinstance(data, list):
+            for item in data:
+                result = self.get_first_image_url(item)
+                if result:
+                    return result
+
+        return None
+
     def save(self, *args, **kwargs):
         self.is_published = True
         self.is_draft = False
+
+        # Extract the first image from content_json
+        image_url = self.get_first_image_url(self.content_json)
+
+        if image_url:
+            # Only download the image if preview_image isn't already
+            # pointing to the same image.
+            try:
+                response = requests.get(image_url, timeout=10)
+                response.raise_for_status()
+
+                filename = urlparse(image_url).path.split('/')[-1]
+                if not filename:
+                    filename = 'preview.jpg'
+
+                self.preview_image.save(
+                    filename,
+                    ContentFile(response.content),
+                    save=False,
+                )
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Failed to download preview image: %s", image_url
+                )
+        else:
+            self.preview_image = ''
 
         if not self.category_id and self.keywords:
             try:
                 from .categorizers import predict_category
                 self.category = predict_category(
-                    self.keywords, self.created_by)
-            except Exception as e:  # never block saving a post
-                import logging
+                    self.keywords, self.created_by
+                )
+            except Exception as e:
                 logging.getLogger(__name__).exception(
-                    "Auto-categorize failed: %s", e)
+                    "Auto-categorize failed: %s", e
+                )
 
         super().save(*args, **kwargs)
 
@@ -88,10 +152,10 @@ class PostComment(models.Model):
 
 class StoryList(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="story_lists")
+    stories = models.ManyToManyField(Post, related_name="in_lists", blank=True)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True, null=True)
     is_private = models.BooleanField(default=True)
-    stories = models.ManyToManyField(Post, related_name="in_lists", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

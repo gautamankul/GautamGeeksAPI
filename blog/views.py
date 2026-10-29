@@ -1,5 +1,6 @@
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
@@ -246,7 +247,7 @@ class PostCommentListAPIView(APIView):
     def get(self, request, post_id):
         comments = PostComment.objects.filter(
             post_id=post_id
-        ).select_related("user").order_by("-created_at")
+        ).select_related("user", "user__profile").order_by("-created_at")
 
         serializer = PostCommentSerializer(
             comments,
@@ -299,6 +300,118 @@ class UnfollowUserView(generics.DestroyAPIView):
         following_id = self.kwargs.get('user_id')
         # Find the follow object where current user follows target user
         return Follow.objects.get(follower=self.request.user, following_id=following_id)
+
+
+class StoryListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = StoryListSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+# class StoryListAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+#
+#     def get(self, request):
+#         story_lists = StoryList.objects.filter(user=request.user).prefetch_related("stories")
+#         serializer = StoryListSerializer(story_lists, many=True, context={"request": request})
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class StoryListAPIView(generics.ListAPIView):
+    """
+    GET /blog/story-lists/?story_id=<id>
+    Lists all library lists for the user, indicating whether each list contains the story.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.query_params.get("story_id"):
+            return StoryListBookmarkSerializer
+        return StoryListSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        story_id = self.request.query_params.get("story_id")
+        if story_id:
+            context["story_id"] = int(story_id)
+        return context
+
+    def get_queryset(self):
+        return StoryList.objects.filter(user=self.request.user).prefetch_related("stories")
+
+
+class StoryListDetailAPIView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StoryListSerializer
+
+    def get_queryset(self):
+        return StoryList.objects.filter(
+            user=self.request.user
+        ).prefetch_related("stories")
+
+    def patch(self, request, *args, **kwargs):
+        story_list = self.get_object()
+
+        serializer = StoryListToggleStorySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        story_id = serializer.validated_data["story_id"]
+
+        story = get_object_or_404(Post, id=story_id)
+
+        if story_list.stories.filter(id=story.id).exists():
+            story_list.stories.remove(story)
+            added = False
+        else:
+            story_list.stories.add(story)
+            added = True
+
+        return Response(
+            {
+                "success": True,
+                "added": added,
+                "list_id": story_list.id,
+                "story_id": story.id,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class StoryListDeleteAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            story_list = StoryList.objects.get(
+                pk=pk,
+                user=request.user
+            )
+        except StoryList.DoesNotExist:
+            return Response(
+                {"error": "Story list not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        story_list.delete()
+
+        return Response(
+            {"message": "Story list deleted successfully."},
+            status=status.HTTP_200_OK
+        )
 
 
 class MonthlyStatsView(APIView):
