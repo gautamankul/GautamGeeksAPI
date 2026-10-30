@@ -13,8 +13,20 @@ class SeriesViewSetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Series
-        fields = ['id', 'name', 'posts_count', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = [
+            'id',
+            'name',
+            'is_completed',
+            'posts_count',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'posts_count']
+
+    def validate_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Series name cannot be empty.")
+        return value.strip()
 
 
 class CategoryViewSetSerializer(serializers.ModelSerializer):
@@ -131,12 +143,7 @@ class PublicPostViewSetSerializer(serializers.ModelSerializer):
 
 
 class UserPostViewSetSerializer(serializers.ModelSerializer):
-    # Explicitly allow null and restrict choices to Series created by the requesting user
-    series = serializers.PrimaryKeyRelatedField(
-        queryset=Series.objects.all(),
-        allow_null=True,
-        required=False
-    )
+    series = serializers.PrimaryKeyRelatedField(queryset=Series.objects.all(),allow_null=True,required=False)
     category = CategoryViewSetSerializer(read_only=True)
     created_by = UserViewSetSerializer(read_only=True)
     updated_by = UserViewSetSerializer(read_only=True)
