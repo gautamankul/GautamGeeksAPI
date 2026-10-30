@@ -1,7 +1,18 @@
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import viewsets
-from .models import Post
-from .serializations import (UserPostViewSetSerializer, PublicPostViewSetSerializer)
+from .models import Post, Series
+from .serializations import (UserPostViewSetSerializer, PublicPostViewSetSerializer, SeriesViewSetSerializer)
+
+
+class SeriesViewSet(viewsets.ModelViewSet):
+    serializer_class = SeriesViewSetSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Series.objects.filter(created_by=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 class PostViewSet(viewsets.ModelViewSet):

@@ -3,9 +3,18 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from accounts.models import Profile
-from .models import Post, Category, PostClap, PostComment, Follow
+from .models import Post, Category, PostClap, PostComment, Series
 
 User = get_user_model()
+
+
+class SeriesViewSetSerializer(serializers.ModelSerializer):
+    posts_count = serializers.IntegerField(source='posts.count', read_only=True)
+
+    class Meta:
+        model = Series
+        fields = ['id', 'name', 'posts_count', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
 
 class CategoryViewSetSerializer(serializers.ModelSerializer):
@@ -122,6 +131,12 @@ class PublicPostViewSetSerializer(serializers.ModelSerializer):
 
 
 class UserPostViewSetSerializer(serializers.ModelSerializer):
+    # Explicitly allow null and restrict choices to Series created by the requesting user
+    series = serializers.PrimaryKeyRelatedField(
+        queryset=Series.objects.all(),
+        allow_null=True,
+        required=False
+    )
     category = CategoryViewSetSerializer(read_only=True)
     created_by = UserViewSetSerializer(read_only=True)
     updated_by = UserViewSetSerializer(read_only=True)
@@ -133,6 +148,7 @@ class UserPostViewSetSerializer(serializers.ModelSerializer):
         model = Post
         fields = [
             "id",
+            "series",
             "title",
             "content_json",
             "content_html",
@@ -158,22 +174,29 @@ class UserPostViewSetSerializer(serializers.ModelSerializer):
             "profile",
         ]
 
+    def to_internal_value(self, data):
+        # Handle cases where frontend sends "" or string "null" from query params
+        if "series" in data:
+            val = data.get("series")
+            if val in ("", "null", "undefined", None):
+                data = data.copy() if hasattr(data, "copy") else dict(data)
+                data["series"] = None
+        return super().to_internal_value(data)
+
+    def validate_series(self, value):
+        if value is not None:
+            request = self.context.get("request")
+            if request and value.created_by != request.user:
+                raise serializers.ValidationError("You can only add posts to your own series.")
+        return value
+
     def validate_keywords(self, value):
         if not isinstance(value, list):
-            raise serializers.ValidationError(
-                "Keywords must be a list of strings."
-            )
-
+            raise serializers.ValidationError("Keywords must be a list of strings.")
         if len(value) > 5:
-            raise serializers.ValidationError(
-                "You can add up to 5 topics only."
-            )
-
+            raise serializers.ValidationError("You can add up to 5 topics only.")
         if not all(isinstance(tag, str) for tag in value):
-            raise serializers.ValidationError(
-                "Each keyword must be a string."
-            )
-
+            raise serializers.ValidationError("Each keyword must be a string.")
         return [tag.strip() for tag in value if tag.strip()]
 
     def get_profile(self, obj):
@@ -181,10 +204,7 @@ class UserPostViewSetSerializer(serializers.ModelSerializer):
             profile = obj.created_by.profile
         except Profile.DoesNotExist:
             return None
-
-        return ProfileViewSetSerializer(
-            profile, context=self.context
-        ).data
+        return ProfileViewSetSerializer(profile, context=self.context).data
 
     def get_total_claps(self, obj):
         return (
@@ -195,13 +215,7 @@ class UserPostViewSetSerializer(serializers.ModelSerializer):
 
     def get_my_claps(self, obj):
         request = self.context.get("request")
-
         if not request or not request.user.is_authenticated:
             return 0
-
-        clap = PostClap.objects.filter(
-            post=obj,
-            user=request.user,
-        ).first()
-
+        clap = PostClap.objects.filter(post=obj, user=request.user).first()
         return clap.clap_count if clap else 0

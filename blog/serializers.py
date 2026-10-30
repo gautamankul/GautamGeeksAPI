@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
 
-from .models import Post, Category, StoryList, PostClap, PostComment, Follow
+from .models import Series, Post, Category, StoryList, PostClap, PostComment, Follow
 from accounts.models import Profile
 
 User = get_user_model()
@@ -33,6 +33,90 @@ class BProfileSerializer(serializers.ModelSerializer):
         if obj.avatar and hasattr(obj.avatar, "url"):
             return request.build_absolute_uri(obj.avatar.url)
         return None
+
+
+class PostSerializer(serializers.ModelSerializer):
+    category = CategorySerializer(read_only=True)
+    created_by = UserSerializer(read_only=True)
+    updated_by = UserSerializer(read_only=True)
+    profile = serializers.SerializerMethodField()
+    total_claps = serializers.SerializerMethodField()
+    my_claps = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
+    comment_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Post
+        fields = [
+            "id",
+            "title",
+            "content_json",
+            "content_html",
+            "category",
+            "profile",
+            'keywords',
+            'is_following',
+            'comment_count',
+            'is_paywalled',
+            'notify_subscribers',
+            "total_claps",
+            "my_claps",
+            "created_by",
+            "updated_by",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "created_by",
+            "updated_by",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_profile(self, obj):
+        if hasattr(obj.created_by, "profile"):
+            # Pass the parent serializer context so request is available
+            return BProfileSerializer(obj.created_by.profile, context=self.context).data
+        return None
+
+    def validate_keywords(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Keywords must be a list of strings.")
+        if len(value) > 5:
+            raise serializers.ValidationError("You can add up to 5 topics only.")
+        return [str(tag).strip() for tag in value if str(tag).strip()]
+
+    def get_total_claps(self, obj):
+        return obj.clap.aggregate(total=Sum("clap_count"))["total"] or 0
+
+    def get_my_claps(self, obj):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            return 0
+
+        return PostClap.objects.filter(post=obj, user=request.user).aggregate(total=Sum("clap_count"))["total"] or 0
+
+    def get_is_following(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+
+        # Users cannot follow themselves
+        if request.user == obj.created_by:
+            return False
+
+        return Follow.objects.filter(
+            follower=request.user,
+            following=obj.created_by
+        ).exists()
+
+    def get_comment_count(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return 0
+
+        return PostComment.objects.filter(post=obj).count()
 
 
 class PostClapSerializer(serializers.ModelSerializer):
@@ -151,8 +235,8 @@ class FollowSerializer(serializers.ModelSerializer):
 
         profile = getattr(user, "profile", None)
         avatar = (
-            getattr(profile, "avatar", None)
-            or getattr(profile, "avatar_url", None)
+                getattr(profile, "avatar", None)
+                or getattr(profile, "avatar_url", None)
         )
 
         if avatar and hasattr(avatar, "url"):
@@ -162,86 +246,3 @@ class FollowSerializer(serializers.ModelSerializer):
             return avatar
 
         return "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60"
-
-class PostSerializer(serializers.ModelSerializer):
-    category = CategorySerializer(read_only=True)
-    created_by = UserSerializer(read_only=True)
-    updated_by = UserSerializer(read_only=True)
-    profile = serializers.SerializerMethodField()
-    total_claps = serializers.SerializerMethodField()
-    my_claps = serializers.SerializerMethodField()
-    is_following = serializers.SerializerMethodField()
-    comment_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Post
-        fields = [
-            "id",
-            "title",
-            "content_json",
-            "content_html",
-            "category",
-            "profile",
-            'keywords',
-            'is_following',
-            'comment_count',
-            'is_paywalled',
-            'notify_subscribers',
-            "total_claps",
-            "my_claps",
-            "created_by",
-            "updated_by",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = [
-            "created_by",
-            "updated_by",
-            "created_at",
-            "updated_at",
-        ]
-
-    def get_profile(self, obj):
-        if hasattr(obj.created_by, "profile"):
-            # Pass the parent serializer context so request is available
-            return BProfileSerializer(obj.created_by.profile, context=self.context).data
-        return None
-
-    def validate_keywords(self, value):
-        if not isinstance(value, list):
-            raise serializers.ValidationError("Keywords must be a list of strings.")
-        if len(value) > 5:
-            raise serializers.ValidationError("You can add up to 5 topics only.")
-        return [str(tag).strip() for tag in value if str(tag).strip()]
-
-    def get_total_claps(self, obj):
-        return obj.clap.aggregate(total=Sum("clap_count"))["total"] or 0
-
-    def get_my_claps(self, obj):
-        request = self.context.get("request")
-
-        if not request or not request.user.is_authenticated:
-            return 0
-
-        return PostClap.objects.filter(post=obj, user=request.user).aggregate(total=Sum("clap_count"))["total"] or 0
-
-    def get_is_following(self, obj):
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
-
-        # Users cannot follow themselves
-        if request.user == obj.created_by:
-            return False
-
-        return Follow.objects.filter(
-            follower=request.user,
-            following=obj.created_by
-        ).exists()
-
-    def get_comment_count(self, obj):
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return 0
-
-        return PostComment.objects.filter(post=obj).count()

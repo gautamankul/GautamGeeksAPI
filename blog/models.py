@@ -26,7 +26,20 @@ class Category(models.Model):
         return self.name or f"Untitled Category #{self.id}"
 
 
+class Series(models.Model):
+    name = models.CharField(max_length=255, blank=True, default='')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='series_created')
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 class Post(models.Model):
+    series = models.ForeignKey(Series, on_delete=models.CASCADE, related_name='posts',null=True,blank=True)
     title = models.CharField(max_length=255, blank=True, default='')
     preview_image = models.ImageField(upload_to='post_previews', blank=True, default='')
     content_json = models.JSONField(null=True, blank=True)
