@@ -101,7 +101,7 @@ class MyFeaturesPostView(APIView):
         return Response(serializer.data)
 
 
-class BlogPostDetailAPIView(APIView):
+class BlogPostDetailAPIViewOld(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
@@ -114,6 +114,57 @@ class BlogPostDetailAPIView(APIView):
 
         serializer = PostSerializer(post, context={"request": request}, )
         return Response(serializer.data)
+
+
+class BlogPostDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        post = get_object_or_404(
+            Post.objects.select_related(
+                "category",
+                "created_by",
+                "updated_by",
+                "series",
+            ),
+            pk=pk,
+            is_published=True,
+            is_draft=False,
+        )
+
+        # Serialize the requested post
+        serializer = PostSerializer(post,context={"request": request},)
+
+        # Get all published posts in the same series
+        series_posts = []
+
+        if post.series:
+            series_posts = Post.objects.filter(
+                series=post.series,
+                is_published=True,
+                is_draft=False,
+            ).select_related(
+                "category",
+                "created_by",
+                "updated_by",
+                "series",
+            ).order_by("created_at")
+
+        # Serialize all posts belonging to the series
+        series_serializer = PostSerializer(
+            series_posts,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response({
+            "post": serializer.data,
+            "series": {
+                "id": post.series.id if post.series else None,
+                "name": post.series.name if post.series else None,
+                "posts": series_serializer.data,
+            },
+        })
 
 
 class PostClapAPIView(APIView):
@@ -283,7 +334,6 @@ class FollowUserView(generics.CreateAPIView):
         serializer.save(follower=follower_user)
 
 
-
 class FollowerListView(generics.ListAPIView):
     serializer_class = FollowSerializer
     permission_classes = [AllowAny]
@@ -296,7 +346,6 @@ class FollowerListView(generics.ListAPIView):
             .select_related("following", "following__profile")
             .order_by("-created_at")
         )
-
 
 
 class UnfollowUserView(generics.DestroyAPIView):

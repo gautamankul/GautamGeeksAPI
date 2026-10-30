@@ -28,6 +28,7 @@ class Category(models.Model):
 
 class Series(models.Model):
     name = models.CharField(max_length=255, blank=True, default='')
+    is_completed = models.BooleanField(default=False)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='series_created')
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, )
 
