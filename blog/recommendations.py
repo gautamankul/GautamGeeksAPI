@@ -37,3 +37,4 @@ def get_recommended_posts(user, limit_categories=3):
         .annotate(rank=weights)
         .order_by("-rank", "-is_trending", "-created_at")
     )
+

@@ -1,6 +1,8 @@
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.core.exceptions import ValidationError
+from django.db.models import Sum, Value, IntegerField, Q
+from django.db.models.functions import Coalesce
 from django.core.files.storage import default_storage
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
@@ -41,6 +43,27 @@ class ImageUploadView(APIView):
         return Response({"url": image_url})
 
 
+class GlobalTrendingPostsView(generics.ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return (
+            Post.objects.filter(
+                is_published=True,
+                is_draft=False,
+            )
+            .annotate(
+                total_claps=Coalesce(
+                    Sum("clap__clap_count"),
+                    Value(0),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("-total_claps", "-created_at")[:6]
+        )
+
+
 class MyRecommendedPostsView(generics.ListAPIView):
     """ This is for logged user you post for recommended posts """
 
@@ -48,8 +71,50 @@ class MyRecommendedPostsView(generics.ListAPIView):
     serializer_class = PostSerializer
 
     def get_queryset(self):
-        print('get_recommended_posts', get_recommended_posts(self.request.user))
         return get_recommended_posts(self.request.user)
+
+
+class TrendingPostsView(generics.ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        # 1. Get keywords from the current user's posts
+        user_posts = Post.objects.filter(created_by=user).exclude(keywords=[]).values_list("keywords", flat=True)
+        user_keywords = set()
+
+        for keywords in user_posts:
+            if isinstance(keywords, list):
+                user_keywords.update(
+                    keyword.strip().lower()
+                    for keyword in keywords
+                    if isinstance(keyword, str) and keyword.strip()
+                )
+
+        # 2. Find posts matching the user's keywords
+        posts = Post.objects.filter(is_published=True, is_draft=False, ).exclude(
+            created_by=user
+        )
+
+        if user_keywords:
+            keyword_query = Q()
+
+            for keyword in user_keywords:
+                keyword_query |= Q(keywords__icontains=keyword)
+
+            posts = posts.filter(keyword_query)
+
+        # 3. Annotate total claps for every post
+        posts = posts.annotate(
+            total_claps=Sum("clap__clap_count")
+        )
+
+        # 4. Order by total claps and return the top 5
+        return posts.order_by(
+            "-total_claps", "-created_at"
+        )[:5]
 
 
 class MyFeaturesPostView(APIView):
@@ -133,7 +198,7 @@ class BlogPostDetailAPIView(APIView):
         )
 
         # Serialize the requested post
-        serializer = PostSerializer(post,context={"request": request},)
+        serializer = PostSerializer(post, context={"request": request}, )
 
         # Get all published posts in the same series
         series_posts = []
