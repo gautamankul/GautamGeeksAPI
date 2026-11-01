@@ -627,15 +627,16 @@ class AuthorProfileView(APIView):
             created_by=author,
             series__isnull=True,
             is_published=True,
-            is_draft=False
-        ).select_related('category')
+            is_draft=False,
+            is_private=False,
+        ).select_related('category').order_by('-created_at')
 
         # 2. Fetch series created by this author that have at least one published post
         series = Series.objects.filter(
             created_by=author,
             posts__is_published=True,
             posts__is_draft=False
-        ).distinct().prefetch_related('posts')
+        ).distinct().prefetch_related('posts').order_by('-created_at')
 
         payload = {
             'author': author,

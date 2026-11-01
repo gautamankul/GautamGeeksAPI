@@ -57,7 +57,7 @@ class PostSerializer(serializers.ModelSerializer):
             'keywords',
             'is_following',
             'comment_count',
-            'is_paywalled',
+            'is_private',
             'notify_subscribers',
             "total_claps",
             "my_claps",
@@ -248,7 +248,10 @@ class FollowSerializer(serializers.ModelSerializer):
         return "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60"
 
 
-'''Published stories grouped into Standalone and Series for user '''
+'''
+Returns author profile info, published standalone posts,
+and published series-grouped posts. Excludes all drafts.
+'''
 
 
 class AuthorPostSerializer(serializers.ModelSerializer):
@@ -264,12 +267,13 @@ class AuthorPostSerializer(serializers.ModelSerializer):
             'preview_image',
             'subtitle' if hasattr(Post, 'subtitle') else 'id',  # Safe fallback if subtitle is property/field
             'keywords',
-            'is_paywalled',
+            'is_private',
             'clap_count',
             'comments_count',
             'category_name',
             'created_at',
         ]
+        ordering = ['-created_at']
 
     def get_clap_count(self, obj):
         return (
@@ -297,6 +301,7 @@ class AuthorSeriesSerializer(serializers.ModelSerializer):
             'total_posts',
             'posts',
         ]
+        ordering = ['-created_at']
 
     def get_posts(self, obj):
         # Return only published non-draft posts in this series
@@ -326,7 +331,6 @@ class AuthorProfileResponseSerializer(serializers.Serializer):
     def get_avatar(self, obj):
         author = obj['author']
         request = self.context.get('request')
-        # Check standard profile relation
         profile = getattr(author, 'profile', None)
         if profile:
             avatar_field = getattr(profile, 'avatar', None) or getattr(profile, 'avatar_url', None)
@@ -342,20 +346,18 @@ class AuthorProfileResponseSerializer(serializers.Serializer):
 
     def get_followers_count(self, obj):
         author = obj['author']
-        # Follow model relationship check (e.g. author.followers.count() or related_name='following_set')
-        if hasattr(author, 'followers'):
-            return author.followers.count()
-        return 0
+        return author.follower_set.count()
 
     def get_is_following(self, obj):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
+
         author = obj['author']
-        # Adjust depending on your Follow model
-        if hasattr(request.user, 'following'):
-            return request.user.following.filter(following=author).exists()
-        return False
+        if request.user.id == author.id:
+            return False
+
+        return request.user.following_set.filter(following=author).exists()
 
     def get_standalone_posts(self, obj):
         return AuthorPostSerializer(obj['standalone_posts'], many=True, context=self.context).data
