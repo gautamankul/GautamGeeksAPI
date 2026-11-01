@@ -73,6 +73,7 @@ class PublicPostViewSetSerializer(serializers.ModelSerializer):
     updated_by = UserViewSetSerializer(read_only=True)
     profile = serializers.SerializerMethodField()
     clap_count = serializers.SerializerMethodField()
+    comments_count = serializers.SerializerMethodField()
     comments = serializers.SerializerMethodField()
 
     class Meta:
@@ -88,6 +89,7 @@ class PublicPostViewSetSerializer(serializers.ModelSerializer):
             "is_paywalled",
             "notify_subscribers",
             "clap_count",
+            "comments_count",
             "comments",
             "created_by",
             "updated_by",
@@ -130,10 +132,12 @@ class PublicPostViewSetSerializer(serializers.ModelSerializer):
                 )["total"] or 0
         )
 
+    def get_comments_count(self, obj):
+        comments = PostComment.objects.filter(post=obj)
+        return comments.count()
+
     def get_comments(self, obj):
-        comments = PostComment.objects.filter(
-            post=obj
-        ).select_related("user").order_by("-created_at")
+        comments = PostComment.objects.filter(post=obj).select_related("user").order_by("-created_at")
 
         return PostCommentSerializer(
             comments,

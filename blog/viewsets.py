@@ -6,13 +6,8 @@ from .models import Post, Series
 from .serializations import (UserPostViewSetSerializer, PublicPostViewSetSerializer, SeriesViewSetSerializer)
 
 
-class SeriesViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.UpdateModelMixin,
-    viewsets.GenericViewSet,
-):
+class SeriesViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, mixins.UpdateModelMixin,
+                    viewsets.GenericViewSet, ):
     serializer_class = SeriesViewSetSerializer
     permission_classes = [IsAuthenticated]
 

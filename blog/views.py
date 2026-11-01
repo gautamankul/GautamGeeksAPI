@@ -114,7 +114,7 @@ class TrendingPostsView(generics.ListAPIView):
         # 4. Order by total claps and return the top 5
         return posts.order_by(
             "-total_claps", "-created_at"
-        )[:5]
+        )[:3]
 
 
 class MyFeaturesPostView(APIView):
@@ -410,6 +410,18 @@ class FollowerListView(generics.ListAPIView):
             Follow.objects.filter(follower_id=user_id)
             .select_related("following", "following__profile")
             .order_by("-created_at")
+        )
+
+
+class RandomFollowerListView(generics.ListAPIView):
+    serializer_class = FollowSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return (
+            Follow.objects.all()
+            .select_related("following", "following__profile")
+            .order_by("?")[:2]
         )
 
 

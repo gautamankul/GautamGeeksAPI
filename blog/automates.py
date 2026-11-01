@@ -1,18 +1,240 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+# from transformers import AutoModelForCausalLM, AutoTokenizer
+# from rest_framework.views import APIView
+# from rest_framework.permissions import IsAuthenticated
+# import re
+# import threading
+# import logging
+# import markdown
+# import torch
+#
+# logger = logging.getLogger(__name__)
+#
+# # Smaller model for faster generation.
+# MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
+#
+# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#
+# if DEVICE.type == "cuda":
+#     MODEL_DTYPE = (
+#         torch.bfloat16
+#         if torch.cuda.is_bf16_supported()
+#         else torch.float16
+#     )
+#
+# else:
+#     MODEL_DTYPE = torch.float32
+#
+# _tokenizer = None
+# _model = None
+# _lock = threading.Lock()
+#
+#
+# def get_modelold():
+#     """Load the model once per process."""
+#     global _tokenizer, _model
+#
+#     if _model is None:
+#         with _lock:
+#             if _model is None:
+#                 logger.info("Loading blog generation model...")
+#
+#                 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+#
+#                 model = AutoModelForCausalLM.from_pretrained(
+#                     MODEL_ID,
+#                     torch_dtype=MODEL_DTYPE,
+#                     low_cpu_mem_usage=True,
+#                     attn_implementation="sdpa",
+#                 )
+#
+#                 model.to(DEVICE)
+#                 model.eval()
+#
+#                 _tokenizer = tokenizer
+#                 _model = model
+#
+#                 logger.info("Blog generation model loaded.")
+#
+#     return _tokenizer, _model
+#
+#
+# SYSTEM = """
+# You are an expert technical blog writer who writes high-quality,
+# complete technical articles for Medium.
+#
+# Write a complete, engaging, technically accurate blog post.
+#
+# MANDATORY STRUCTURE:
+#
+# 1. First line: TITLE: <descriptive title>
+# 2. Introduction explaining the topic and why it matters.
+# 3. Several well-organized sections using ## headings.
+# 4. Detailed explanations with practical examples.
+# 5. Include Python code blocks when relevant to the topic.
+# 6. Explain the code and important concepts.
+# 7. Include common mistakes, best practices, or tips where useful.
+# 8. End with a meaningful conclusion.
+#
+# WRITING RULES:
+#
+# - Target approximately 600-800 words.
+# - Make the article comprehensive and useful.
+# - Use valid Markdown formatting.
+# - Use fenced code blocks for code.
+# - Avoid repetitive explanations and filler.
+# - Do not skip important concepts just to shorten the article.
+# - Ensure the article has a clear beginning, middle, and ending.
+# - Output the title first, followed by the complete article.
+# - Do not include commentary about these instructions.
+# """
+#
+#
+# class AIBlogGeneratorViewold(APIView):
+#     permission_classes = [IsAuthenticated]
+#
+#     def post(self, request):
+#         prompt = request.data.get("prompt", "")
+#
+#         if not isinstance(prompt, str) or not prompt.strip():
+#             return Response(
+#                 {"error": "Prompt cannot be empty."},
+#                 status=400,
+#             )
+#
+#         prompt = prompt.strip()
+#
+#         try:
+#             start_time = time.perf_counter()
+#
+#             tokenizer, model = get_model()
+#             model_ready_time = time.perf_counter()
+#
+#             messages = [
+#                 {"role": "system", "content": SYSTEM},
+#                 {
+#                     "role": "user",
+#                     "content": (
+#                         f"Write a complete technical blog post about: {prompt}"
+#                     ),
+#                 },
+#             ]
+#
+#             inputs = tokenizer.apply_chat_template(
+#                 messages,
+#                 tokenize=True,
+#                 add_generation_prompt=True,
+#                 return_tensors="pt",
+#                 return_dict=True,
+#             )
+#
+#             inputs = {
+#                 key: value.to(DEVICE)
+#                 for key, value in inputs.items()
+#             }
+#
+#             input_length = inputs["input_ids"].shape[1]
+#
+#             # Reserve enough tokens for a complete article.
+#             max_new_tokens = 1000
+#
+#             with torch.inference_mode():
+#                 output = model.generate(
+#                     **inputs,
+#                     max_new_tokens=max_new_tokens,
+#                     do_sample=False,
+#                     use_cache=True,
+#                     pad_token_id=tokenizer.eos_token_id,
+#                     eos_token_id=tokenizer.eos_token_id,
+#                 )
+#
+#             generation_end_time = time.perf_counter()
+#
+#             generated_tokens = output[0, input_length:]
+#
+#             raw = tokenizer.decode(
+#                 generated_tokens,
+#                 skip_special_tokens=True,
+#             ).strip()
+#
+#             # Extract the title and article body.
+#             match = re.match(
+#                 r"^\s*TITLE:\s*(.+)",
+#                 raw,
+#             )
+#
+#             if match:
+#                 title = match.group(1).strip()
+#                 body_md = raw[match.end():].strip()
+#             else:
+#                 title = prompt[:120].title()
+#                 body_md = raw
+#
+#             # Remove an accidental repeated title at the beginning.
+#             body_md = re.sub(
+#                 r"^\s*TITLE:\s*[^\n]+\n*",
+#                 "",
+#                 body_md,
+#                 count=1,
+#             )
+#
+#             html = markdown.markdown(
+#                 body_md,
+#                 extensions=[
+#                     "fenced_code",
+#                     "tables",
+#                 ],
+#             )
+#
+#             end_time = time.perf_counter()
+#
+#             logger.info(
+#                 "Blog generation timings: model_ready=%.2fs, "
+#                 "generation=%.2fs, formatting=%.2fs, total=%.2fs, "
+#                 "generated_tokens=%d",
+#                 model_ready_time - start_time,
+#                 generation_end_time - model_ready_time,
+#                 end_time - generation_end_time,
+#                 end_time - start_time,
+#                 len(generated_tokens),
+#             )
+#
+#             return Response({
+#                 "title": title,
+#                 "html": html or "<p></p>",
+#             })
+#
+#         except Exception:
+#             logger.exception("Blog generation failed")
+#
+#             return Response(
+#                 {"error": "Failed to generate blog post."},
+#                 status=500,
+#             )
+
+
+# ------------------- Try 2.0 --------------------#
+
+import logging
 import re
 import threading
-import logging
+import time
+
 import markdown
 import torch
 
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+
 logger = logging.getLogger(__name__)
 
-# Smaller model for faster generation.
 MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
 
 if DEVICE.type == "cuda":
     MODEL_DTYPE = (
@@ -20,25 +242,84 @@ if DEVICE.type == "cuda":
         if torch.cuda.is_bf16_supported()
         else torch.float16
     )
-
 else:
     MODEL_DTYPE = torch.float32
 
+
+MAX_NEW_TOKENS = 1600
+MAX_PROMPT_LENGTH = 5000
+
 _tokenizer = None
 _model = None
-_lock = threading.Lock()
+
+# Protect model initialization.
+_model_load_lock = threading.Lock()
+
+# Limit simultaneous inference in each worker process.
+_generation_lock = threading.Lock()
+
+
+SYSTEM = """
+You are an expert technical writer who creates high-quality,
+technically accurate articles for Medium.
+
+Write a complete, original technical blog post about the user's topic.
+
+OUTPUT REQUIREMENTS:
+
+1. The first line must be:
+   TITLE: <descriptive title>
+
+2. Target 600-800 words for the article body, excluding the title.
+
+3. Begin with an engaging introduction explaining the topic and
+   why it matters.
+
+4. Use several well-organized Markdown sections with ## headings.
+
+5. Explain the important concepts clearly, with practical examples.
+
+6. Include relevant Python code blocks when appropriate.
+   Use fenced Markdown code blocks with language identifiers.
+
+7. Explain the code, its purpose, and important implementation details.
+
+8. Include common mistakes, best practices, and trade-offs where useful.
+
+9. End with a meaningful conclusion and practical takeaways.
+
+10. Use valid Markdown and avoid repetitive explanations or filler.
+
+COMPLETENESS:
+
+- Include an introduction, substantive main sections, examples where
+  relevant, and a conclusion.
+- Finish every code block.
+- Finish every sentence and section.
+- Reserve enough space for the conclusion.
+- Never intentionally stop in the middle of a sentence or code block.
+- Do not add commentary about these instructions.
+- Do not fabricate technical facts.
+
+Return the title and complete article, starting with the TITLE line.
+"""
 
 
 def get_model():
-    """Load the model once per process."""
+    """Initialize the model once per process."""
+
     global _tokenizer, _model
 
     if _model is None:
-        with _lock:
+        with _model_load_lock:
             if _model is None:
                 logger.info("Loading blog generation model...")
 
-                tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+                start = time.perf_counter()
+
+                tokenizer = AutoTokenizer.from_pretrained(
+                    MODEL_ID
+                )
 
                 model = AutoModelForCausalLM.from_pretrained(
                     MODEL_ID,
@@ -50,43 +331,55 @@ def get_model():
                 model.to(DEVICE)
                 model.eval()
 
+                # Publish only after initialization succeeds.
                 _tokenizer = tokenizer
                 _model = model
 
-                logger.info("Blog generation model loaded.")
+                logger.info(
+                    "Model loaded in %.2f seconds on %s",
+                    time.perf_counter() - start,
+                    DEVICE,
+                )
 
     return _tokenizer, _model
 
 
-SYSTEM = """
-You are an expert technical blog writer who writes high-quality,
-complete technical articles for Medium.
+def extract_article(raw, fallback_title):
+    """Extract the title and article body from generated Markdown."""
 
-Write a complete, engaging, technically accurate blog post.
+    raw = raw.strip()
 
-MANDATORY STRUCTURE:
+    match = re.match(
+        r"^\s*TITLE:\s*(.+?)\s*$",
+        raw,
+        flags=re.MULTILINE,
+    )
 
-1. First line: TITLE: <descriptive title>
-2. Introduction explaining the topic and why it matters.
-3. Several well-organized sections using ## headings.
-4. Detailed explanations with practical examples.
-5. Include Python code blocks when relevant to the topic.
-6. Explain the code and important concepts.
-7. Include common mistakes, best practices, or tips where useful.
-8. End with a meaningful conclusion.
+    if match:
+        title = match.group(1).strip()
+        body_md = raw[match.end():].strip()
+    else:
+        title = fallback_title[:120]
+        body_md = raw
 
-WRITING RULES:
+    # Remove an accidental duplicate title at the beginning.
+    body_md = re.sub(
+        r"^\s*TITLE:\s*[^\n]+\s*\n?",
+        "",
+        body_md,
+        count=1,
+    ).strip()
 
-- Target approximately 600-800 words.
-- Make the article comprehensive and useful.
-- Use valid Markdown formatting.
-- Use fenced code blocks for code.
-- Avoid repetitive explanations and filler.
-- Do not skip important concepts just to shorten the article.
-- Ensure the article has a clear beginning, middle, and ending.
-- Output the title first, followed by the complete article.
-- Do not include commentary about these instructions.
-"""
+    # Remove a repeated H1 title if the model adds one.
+    body_md = re.sub(
+        r"^\s*#\s+" + re.escape(title) + r"\s*\n+",
+        "",
+        body_md,
+        count=1,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    return title, body_md
 
 
 class AIBlogGeneratorView(APIView):
@@ -103,22 +396,41 @@ class AIBlogGeneratorView(APIView):
 
         prompt = prompt.strip()
 
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            return Response(
+                {
+                    "error": (
+                        f"Prompt cannot exceed "
+                        f"{MAX_PROMPT_LENGTH} characters."
+                    )
+                },
+                status=400,
+            )
+
+        request_start = time.perf_counter()
+
         try:
-            start_time = time.perf_counter()
+            model_start = time.perf_counter()
 
             tokenizer, model = get_model()
+
             model_ready_time = time.perf_counter()
 
             messages = [
-                {"role": "system", "content": SYSTEM},
+                {
+                    "role": "system",
+                    "content": SYSTEM,
+                },
                 {
                     "role": "user",
                     "content": (
-                        f"Write a complete technical blog post about: {prompt}"
+                        "Write a complete technical blog post about "
+                        f"the following topic:\n{prompt}"
                     ),
                 },
             ]
 
+            # Apply the model's native chat template.
             inputs = tokenizer.apply_chat_template(
                 messages,
                 tokenize=True,
@@ -134,20 +446,30 @@ class AIBlogGeneratorView(APIView):
 
             input_length = inputs["input_ids"].shape[1]
 
-            # Reserve enough tokens for a complete article.
-            max_new_tokens = 1000
+            # Serialize inference within this process.
+            with _generation_lock:
+                generation_start = time.perf_counter()
 
-            with torch.inference_mode():
-                output = model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=False,
-                    use_cache=True,
-                    pad_token_id=tokenizer.eos_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                )
+                with torch.inference_mode():
+                    output = model.generate(
+                        **inputs,
+                        max_new_tokens=MAX_NEW_TOKENS,
+                        do_sample=False,
+                        use_cache=True,
+                        pad_token_id=(
+                            tokenizer.pad_token_id
+                            if tokenizer.pad_token_id is not None
+                            else tokenizer.eos_token_id
+                        ),
+                        eos_token_id=tokenizer.eos_token_id,
+                    )
 
-            generation_end_time = time.perf_counter()
+                # CUDA operations are asynchronous. Synchronize before
+                # measuring generation latency on a GPU.
+                if DEVICE.type == "cuda":
+                    torch.cuda.synchronize()
+
+                generation_end = time.perf_counter()
 
             generated_tokens = output[0, input_length:]
 
@@ -156,27 +478,12 @@ class AIBlogGeneratorView(APIView):
                 skip_special_tokens=True,
             ).strip()
 
-            # Extract the title and article body.
-            match = re.match(
-                r"^\s*TITLE:\s*(.+)",
+            title, body_md = extract_article(
                 raw,
+                prompt,
             )
 
-            if match:
-                title = match.group(1).strip()
-                body_md = raw[match.end():].strip()
-            else:
-                title = prompt[:120].title()
-                body_md = raw
-
-            # Remove an accidental repeated title at the beginning.
-            body_md = re.sub(
-                r"^\s*TITLE:\s*[^\n]+\n*",
-                "",
-                body_md,
-                count=1,
-            )
-
+            # Convert generated Markdown into HTML.
             html = markdown.markdown(
                 body_md,
                 extensions=[
@@ -185,301 +492,63 @@ class AIBlogGeneratorView(APIView):
                 ],
             )
 
-            end_time = time.perf_counter()
+            word_count = len(body_md.split())
+
+            # Log short output for diagnostics. Do not automatically
+            # regenerate every short article: retries add latency.
+            if word_count < 500:
+                logger.warning(
+                    "Short article generated: %d words",
+                    word_count,
+                )
+
+            if not body_md:
+                logger.warning(
+                    "Model returned an empty article body."
+                )
+
+                return Response(
+                    {
+                        "error": (
+                            "The model could not generate an article. "
+                            "Please try again."
+                        )
+                    },
+                    status=502,
+                )
 
             logger.info(
-                "Blog generation timings: model_ready=%.2fs, "
-                "generation=%.2fs, formatting=%.2fs, total=%.2fs, "
-                "generated_tokens=%d",
-                model_ready_time - start_time,
-                generation_end_time - model_ready_time,
-                end_time - generation_end_time,
-                end_time - start_time,
+                "Blog metrics: "
+                "model_ready=%.2fs, "
+                "generation=%.2fs, "
+                "total=%.2fs, "
+                "input_tokens=%d, "
+                "output_tokens=%d, "
+                "words=%d, "
+                "device=%s",
+                model_ready_time - model_start,
+                generation_end - generation_start,
+                time.perf_counter() - request_start,
+                input_length,
                 len(generated_tokens),
+                word_count,
+                DEVICE,
             )
 
-            return Response({
-                "title": title,
-                "html": html or "<p></p>",
-            })
+            return Response(
+                {
+                    "title": title,
+                    "html": html or "<p></p>",
+                }
+            )
 
         except Exception:
             logger.exception("Blog generation failed")
 
             return Response(
-                {"error": "Failed to generate blog post."},
+                {
+                    "error": "Failed to generate blog post."
+                },
                 status=500,
             )
-
-
-# ------------------- Try 2.0 --------------------#
-
-import os
-import json
-import time
-import logging
-import requests
-
-from dotenv import load_dotenv
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-
-load_dotenv()
-
-logger = logging.getLogger(__name__)
-
-
-class AIBlogGeneratorViewOLD(APIView):
-    permission_classes = [IsAuthenticated]
-
-    NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-    MODEL_NAME = "mistralai/mistral-large-4-1t-a52b"
-
-    def post(self, request):
-        # Validate prompt
-        prompt = request.data.get("prompt", "")
-
-        if not isinstance(prompt, str):
-            return Response(
-                {"error": "Prompt must be a string."},
-                status=400
-            )
-
-        prompt = prompt.strip()
-
-        if not prompt:
-            return Response(
-                {"error": "Prompt cannot be empty."},
-                status=400
-            )
-
-        # Get NVIDIA API key
-        api_key = os.getenv("NVIDIA_API_KEY")
-
-        if not api_key:
-            logger.error("NVIDIA_API_KEY is missing.")
-
-            return Response(
-                {"error": "NVIDIA API key is not configured."},
-                status=500
-            )
-
-        # Blog generation instructions
-        system_instruction = """
-You are an expert technical blog writer.
-
-Write an engaging, informative technical blog post based
-on the user's topic.
-
-Return ONLY a valid JSON object with exactly two fields:
-
-{
-    "title": "Blog title",
-    "html": "<h2>Introduction</h2><p>Blog content...</p>"
-}
-
-Requirements:
-- Write a clear introduction and conclusion.
-- Use <h2> for main headings.
-- Use <h3> for subsections.
-- Use <p> for paragraphs.
-- Use <ul>, <ol>, and <li> for lists.
-- Use <blockquote> for quotations when appropriate.
-- Format Python examples using:
-  <pre><code class="language-python">...</code></pre>
-- Include practical examples when relevant.
-- Keep the article concise for this initial configuration.
-- Return valid JSON without Markdown code fences.
-- Escape quotation marks and special characters correctly
-  inside JSON strings.
-- Do not include <html>, <head>, or <body> tags.
-"""
-
-        payload = {
-            "model": self.MODEL_NAME,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_instruction
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "Write a technical blog post about:\n\n"
-                        f"{prompt}"
-                    )
-                }
-            ],
-            "max_tokens": 512,
-            "temperature": 0.5,
-            "top_p": 1,
-            "frequency_penalty": 0,
-            "presence_penalty": 0,
-            "stream": False
-        }
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-
-        start_time = time.time()
-
-        try:
-            # Send request to NVIDIA.
-            response = requests.post(
-                self.NVIDIA_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=(15, 300)
-            )
-
-            elapsed = round(time.time() - start_time, 2)
-
-            logger.info(
-                "NVIDIA API responded with status %s in %s seconds.",
-                response.status_code,
-                elapsed
-            )
-
-            # Parse response.
-            try:
-                response_data = response.json()
-            except ValueError:
-                logger.error(
-                    "NVIDIA returned non-JSON data: %s",
-                    response.text[:1000]
-                )
-
-                return Response(
-                    {
-                        "error": "NVIDIA returned an invalid response.",
-                        "elapsed_seconds": elapsed
-                    },
-                    status=502
-                )
-
-            # Handle API errors.
-            if not response.ok:
-                logger.error(
-                    "NVIDIA API error: status=%s response=%s",
-                    response.status_code,
-                    response_data
-                )
-
-                return Response(
-                    {
-                        "error": "NVIDIA API request failed.",
-                        "status_code": response.status_code,
-                        "details": response_data.get(
-                            "detail",
-                            response_data.get(
-                                "error",
-                                "Unknown NVIDIA API error."
-                            )
-                        )
-                    },
-                    status=502
-                )
-
-            # Validate choices.
-            choices = response_data.get("choices", [])
-
-            if not choices:
-                logger.error(
-                    "No choices in NVIDIA response: %s",
-                    response_data
-                )
-
-                return Response(
-                    {"error": "NVIDIA returned no generated content."},
-                    status=502
-                )
-
-            message = choices[0].get("message", {})
-            content = message.get("content")
-
-            if not isinstance(content, str) or not content.strip():
-                return Response(
-                    {"error": "NVIDIA returned empty content."},
-                    status=502
-                )
-
-            # Parse generated JSON.
-            try:
-                result = json.loads(content)
-            except json.JSONDecodeError:
-                logger.warning(
-                    "Generated content is not valid JSON: %s",
-                    content[:1000]
-                )
-
-                return Response(
-                    {
-                        "error": "The model returned invalid JSON.",
-                        "generated_content": content[:2000]
-                    },
-                    status=502
-                )
-
-            # Validate title and HTML.
-            title = result.get("title")
-            html = result.get("html")
-
-            if (
-                    not isinstance(title, str)
-                    or not isinstance(html, str)
-                    or not title.strip()
-                    or not html.strip()
-            ):
-                return Response(
-                    {
-                        "error": "The generated blog has an invalid structure."
-                    },
-                    status=502
-                )
-
-            # Return successful result.
-            return Response(
-                {
-                    "title": title.strip(),
-                    "html": html.strip(),
-                    "model": self.MODEL_NAME,
-                    "elapsed_seconds": elapsed
-                },
-                status=200
-            )
-
-        except requests.Timeout:
-            elapsed = round(time.time() - start_time, 2)
-
-            logger.warning(
-                "NVIDIA request timed out after %s seconds.",
-                elapsed
-            )
-
-            return Response(
-                {
-                    "error": "NVIDIA API request timed out.",
-                    "elapsed_seconds": elapsed,
-                    "message": (
-                        "The AI provider did not return data within "
-                        "the configured timeout."
-                    )
-                },
-                status=504
-            )
-
-        except requests.RequestException:
-            logger.exception("Failed to connect to NVIDIA API.")
-
-            return Response(
-                {
-                    "error": "Unable to connect to NVIDIA API."
-                },
-                status=502
-            )
-
 # -------------------- Try 3.0---------------------#
