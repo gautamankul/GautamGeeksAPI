@@ -163,15 +163,11 @@ MAILERS = {
 }
 
 # Allow React local dev server
-USE_X_FORWARDED_HOST = True
-CORS_ALLOW_ALL_ORIGINS = True
-
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-CSRF_TRUSTED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "https://gautamgeeksapi.onrender.com",
-    "https://gautamageeks.gautamankul.site",
+    "http://127.0.0.1:5173",
+    "https://gautamgeeks.gautamankul.site",
+    "https://www.gautamgeeks.gautamankul.site",
 ]
 
 # Rest Framework Setting
@@ -194,4 +190,3 @@ SIMPLE_JWT = {
 # Increase body size limit to 20MB (or higher depending on your needs)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
-
