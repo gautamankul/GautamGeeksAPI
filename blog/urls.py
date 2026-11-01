@@ -33,4 +33,5 @@ urlpatterns = [
     path("story-lists/", StoryListAPIView.as_view(), name="story-list"),
     path("story-lists/<int:pk>/", StoryListDetailAPIView.as_view(), name="story-list-detail"),
     path("story-lists/<int:pk>/delete/", StoryListDeleteAPIView.as_view(), name="story-list-delete"),
+    path('author-profile/<int:user_id>/', AuthorProfileView.as_view(), name='author-profile'),
 ]

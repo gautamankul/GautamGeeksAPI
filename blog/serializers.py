@@ -246,3 +246,119 @@ class FollowSerializer(serializers.ModelSerializer):
             return avatar
 
         return "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=60"
+
+
+'''Published stories grouped into Standalone and Series for user '''
+
+
+class AuthorPostSerializer(serializers.ModelSerializer):
+    clap_count = serializers.SerializerMethodField()
+    comments_count = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='category.name', read_only=True)
+
+    class Meta:
+        model = Post
+        fields = [
+            'id',
+            'title',
+            'preview_image',
+            'subtitle' if hasattr(Post, 'subtitle') else 'id',  # Safe fallback if subtitle is property/field
+            'keywords',
+            'is_paywalled',
+            'clap_count',
+            'comments_count',
+            'category_name',
+            'created_at',
+        ]
+
+    def get_clap_count(self, obj):
+        return (
+                PostClap.objects.filter(post=obj).aggregate(
+                    total=Sum("clap_count")
+                )["total"] or 0
+        )
+
+    def get_comments_count(self, obj):
+        comments = PostComment.objects.filter(post=obj)
+        return comments.count()
+
+
+class AuthorSeriesSerializer(serializers.ModelSerializer):
+    posts = serializers.SerializerMethodField()
+    total_posts = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Series
+        fields = [
+            'id',
+            'name',
+            'is_completed',
+            'created_at',
+            'total_posts',
+            'posts',
+        ]
+
+    def get_posts(self, obj):
+        # Return only published non-draft posts in this series
+        published_posts = obj.posts.filter(is_published=True, is_draft=False)
+        return AuthorPostSerializer(published_posts, many=True, context=self.context).data
+
+    def get_total_posts(self, obj):
+        return obj.posts.filter(is_published=True, is_draft=False).count()
+
+
+class AuthorProfileResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='author.id')
+    username = serializers.CharField(source='author.username')
+    full_name = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
+    standalone_posts = serializers.SerializerMethodField()
+    series = serializers.SerializerMethodField()
+
+    def get_full_name(self, obj):
+        author = obj['author']
+        name = f"{author.first_name} {author.last_name}".strip()
+        return name or author.username
+
+    def get_avatar(self, obj):
+        author = obj['author']
+        request = self.context.get('request')
+        # Check standard profile relation
+        profile = getattr(author, 'profile', None)
+        if profile:
+            avatar_field = getattr(profile, 'avatar', None) or getattr(profile, 'avatar_url', None)
+            if hasattr(avatar_field, 'url'):
+                return request.build_absolute_uri(avatar_field.url) if request else avatar_field.url
+            if isinstance(avatar_field, str):
+                return avatar_field
+        return "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100"
+
+    def get_bio(self, obj):
+        profile = getattr(obj['author'], 'profile', None)
+        return getattr(profile, 'bio', "") if profile else ""
+
+    def get_followers_count(self, obj):
+        author = obj['author']
+        # Follow model relationship check (e.g. author.followers.count() or related_name='following_set')
+        if hasattr(author, 'followers'):
+            return author.followers.count()
+        return 0
+
+    def get_is_following(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        author = obj['author']
+        # Adjust depending on your Follow model
+        if hasattr(request.user, 'following'):
+            return request.user.following.filter(following=author).exists()
+        return False
+
+    def get_standalone_posts(self, obj):
+        return AuthorPostSerializer(obj['standalone_posts'], many=True, context=self.context).data
+
+    def get_series(self, obj):
+        return AuthorSeriesSerializer(obj['series'], many=True, context=self.context).data

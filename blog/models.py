@@ -49,7 +49,7 @@ class Post(models.Model):
     is_published = models.BooleanField(default=False)
     is_trending = models.BooleanField(default=False)
     keywords = models.JSONField(default=list, blank=True)
-    is_paywalled = models.BooleanField(default=False)
+    is_private = models.BooleanField(default=False)
     notify_subscribers = models.BooleanField(default=True)
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="posts")

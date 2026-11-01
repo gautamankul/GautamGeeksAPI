@@ -610,3 +610,38 @@ class MonthlyStatsView(APIView):
             },
             "chart_data": chart_data,
         })
+
+
+class AuthorProfileView(APIView):
+    """
+    Returns author profile info, published standalone posts,
+    and published series-grouped posts. Excludes all drafts.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, user_id):
+        author = get_object_or_404(User, id=user_id)
+
+        # 1. Fetch only published non-draft standalone posts
+        standalone_posts = Post.objects.filter(
+            created_by=author,
+            series__isnull=True,
+            is_published=True,
+            is_draft=False
+        ).select_related('category')
+
+        # 2. Fetch series created by this author that have at least one published post
+        series = Series.objects.filter(
+            created_by=author,
+            posts__is_published=True,
+            posts__is_draft=False
+        ).distinct().prefetch_related('posts')
+
+        payload = {
+            'author': author,
+            'standalone_posts': standalone_posts,
+            'series': series,
+        }
+
+        serializer = AuthorProfileResponseSerializer(payload, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
