@@ -16,6 +16,7 @@ from datetime import timedelta
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
+
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,10 +25,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-lbm*=0iyfwrjo2-(!rt%j7jc7%ejn904c9gf**qe6)^mbk3*--")
+SECRET_KEY = "django-insecure-lbm*=0iyfwrjo2-(!rt%j7jc7%ejn904c9gf**qe6)^mbk3*--"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1")
+DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
@@ -53,7 +54,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Added for static files support
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -84,13 +84,23 @@ WSGI_APPLICATION = "gautamgeeks.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+db_token = os.getenv("DB_TOKEN")
+db_url = os.getenv("DB_URL")
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
 DATABASES = {
     "default": {
         "ENGINE": "django_libsql",
         "NAME": os.getenv("TURSO_DB_URL"),
         "AUTH_TOKEN": os.getenv("TURSO_AUTH_TOKEN"),
         "OPTIONS": {
-            "timeout": 30,
+            "timeout": 60,
         },
     }
 }
@@ -133,7 +143,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# WhiteNoise storage configuration
+# for whitenose
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -152,21 +162,16 @@ MAILERS = {
     },
 }
 
-# CORS configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://super-duper-capybara-jp6rw5qj9j42jpwr-5173.app.github.dev",
-    "https://gautamgeeks.gautamankul.site",
-    "https://www.gautamgeeks.gautamankul.site",
-]
+# Allow React local dev server
+USE_X_FORWARDED_HOST = True
+CORS_ALLOW_ALL_ORIGINS = True
 
-CORS_ALLOW_CREDENTIALS = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# CSRF Trusted Origins for cross-origin forms/auth
 CSRF_TRUSTED_ORIGINS = [
-    "https://gautamgeeks.gautamankul.site",
-    "https://www.gautamgeeks.gautamankul.site",
+    "http://localhost:5173",
+    "https://gautamgeeksapi.onrender.com",
+    "https://gautamageeks.gautamankul.site",
 ]
 
 # Rest Framework Setting
@@ -186,6 +191,7 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
 }
 
-# Body size and file upload limits (20 MB)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
-FILE_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
+# Increase body size limit to 20MB (or higher depending on your needs)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
+
